@@ -18,6 +18,7 @@
     clearProfile() { return Promise.resolve(); },
     saveOrder() { return Promise.reject(unavailableError()); },
     listOrders() { return Promise.resolve([]); },
+    subscribeOrders() { return () => {}; },
     listAllOrders() { return Promise.reject(unavailableError()); },
     updateOrder() { return Promise.reject(unavailableError()); }
   });
@@ -128,6 +129,20 @@
         return firestoreModule.getDocs(firestoreModule.collection(db, 'users', uid, 'orders')).then((snapshot) => snapshot.docs
           .map((entry) => Object.assign({ id: entry.id }, entry.data()))
           .sort((a, b) => new Date(b.date || 0).getTime() - new Date(a.date || 0).getTime()));
+      },
+      subscribeOrders(uid, onOrders, onError) {
+        if (!uid) throw new Error('A signed-in user is required.');
+        if (typeof onOrders !== 'function') throw new Error('An order update callback is required.');
+        return firestoreModule.onSnapshot(
+          firestoreModule.collection(db, 'users', uid, 'orders'),
+          (snapshot) => {
+            const orders = snapshot.docs
+              .map((entry) => Object.assign({ id: entry.id }, entry.data()))
+              .sort((a, b) => new Date(b.date || 0).getTime() - new Date(a.date || 0).getTime());
+            onOrders(orders);
+          },
+          typeof onError === 'function' ? onError : (error) => console.error('Firebase order subscription failed.', error)
+        );
       },
       listAllOrders() {
         return firestoreModule.getDocs(firestoreModule.collectionGroup(db, 'orders')).then((snapshot) => snapshot.docs

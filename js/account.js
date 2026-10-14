@@ -28,10 +28,14 @@
     const authSession = document.getElementById('authSession');
     const authUserEmail = document.getElementById('authUserEmail');
     const authSignOut = document.getElementById('authSignOut');
+    const profileHub = document.getElementById('profileHub');
+    const profileWelcome = document.getElementById('profileWelcome');
+    const profileAccountEmail = document.getElementById('profileAccountEmail');
     let firebaseApi = null;
     let authUser = null;
     let authMode = 'login';
     let authBusy = false;
+    let stopOrderUpdates = null;
 
     const setNote = (el, message, type = '') => {
       if (!el) return;
@@ -352,22 +356,32 @@
       }
     };
 
-    const syncRemoteOrders = async (user) => {
+    const watchRemoteOrders = async (user) => {
       if (!firebaseApi || !firebaseApi.enabled || !user) return;
+      if (stopOrderUpdates) stopOrderUpdates();
+      stopOrderUpdates = null;
       try {
         await firebaseApi.ready;
-        const remote = await firebaseApi.listOrders(user.uid);
-        const merged = mergeOrders(readOrders(), remote);
-        EH.store.set(orderKey, merged.slice(0, 30));
-        renderOrders(merged);
+        if (!authUser || authUser.uid !== user.uid) return;
+        stopOrderUpdates = firebaseApi.subscribeOrders(user.uid, (remote) => {
+          if (!authUser || authUser.uid !== user.uid) return;
+          const merged = mergeOrders(readOrders(), remote);
+          EH.store.set(orderKey, merged.slice(0, 30));
+          renderOrders(merged);
+        }, (error) => {
+          console.warn('Firebase order updates could not be received.', error);
+          setNote(profileNote, 'Live order updates are unavailable. Refresh the page to try again.', 'err');
+        });
       } catch (error) {
-        console.warn('Firebase order history load failed.', error);
+        console.warn('Firebase order history subscription failed.', error);
+        setNote(profileNote, 'Order history could not be synced. Please refresh and try again.', 'err');
       }
     };
 
     const renderAuthState = (user) => {
       authUser = user || null;
       const signedIn = Boolean(authUser);
+      if (profileHub) profileHub.hidden = !signedIn;
       if (authTabsBox) authTabsBox.hidden = signedIn;
       if (authForm) authForm.hidden = signedIn;
       if (authSession) authSession.hidden = !signedIn;
@@ -379,6 +393,12 @@
         ? 'Used to fill in checkout faster. Synced securely to your signed-in account.'
         : 'Used to fill in checkout faster. Stored only on this device until you sign in.';
       if (signedIn) setNote(profileNote, 'Your signed-in profile is ready to use.', 'ok');
+      if (profileWelcome) profileWelcome.textContent = signedIn && authUser.displayName ? `Welcome, ${authUser.displayName}` : 'Welcome back';
+      if (profileAccountEmail) profileAccountEmail.textContent = signedIn ? (authUser.email || '') : '';
+      if (!signedIn && stopOrderUpdates) {
+        stopOrderUpdates();
+        stopOrderUpdates = null;
+      }
     };
 
     const setupFirebase = (api) => {
@@ -394,7 +414,7 @@
         renderAuthState(user);
         if (user) {
           syncRemoteProfile(user);
-          syncRemoteOrders(user);
+          watchRemoteOrders(user);
         } else {
           renderOrders();
         }

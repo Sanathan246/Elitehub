@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>My Orders — EliteHub</title>
+  <title>My Profile — EliteHub</title>
   <meta name="robots" content="noindex">
   <meta name="theme-color" content="#070609">
   <link rel="icon" type="image/png" href="assets/favicon.png">
@@ -23,8 +23,8 @@
       <div class="stars" data-stars="80"></div>
       <div class="container">
         <nav class="crumbs" aria-label="Breadcrumb"><a href="index.html">Home</a><span class="sep">/</span><span>My Account</span></nav>
-        <h1>My <span class="gold-text">Orders</span></h1>
-        <p>Your orders, delivery details and custom design files. Sign in before checkout to keep orders available across devices.</p>
+        <h1>My <span class="gold-text">Profile</span></h1>
+        <p>Manage your account, review orders and update your contact and delivery details.</p>
       </div>
     </section>
 
@@ -82,13 +82,23 @@
             </div>
           </div>
         </div>
+        <div class="panel" id="profileHub" hidden>
+          <p class="eyebrow">Your EliteHub account</p>
+          <h2 id="profileWelcome">Welcome back</h2>
+          <p class="auth-session-email" id="profileAccountEmail"></p>
+          <ul class="account-benefits">
+            <li><span aria-hidden="true">&#10003;</span><a href="#ordersSection">My Orders</a></li>
+            <li><span aria-hidden="true">&#10003;</span><a href="#savedDetails">Contact and delivery details</a></li>
+            <li><span aria-hidden="true">&#10003;</span><a href="contact.html">Contact EliteHub support</a></li>
+          </ul>
+        </div>
       </div>
     </section>
 
-    <section class="section">
+    <section class="section" id="ordersSection">
       <div class="container" style="display:grid;grid-template-columns:minmax(0,1.6fr) minmax(280px,1fr);gap:30px;align-items:start" id="accountGrid">
         <div class="orders" id="orders"></div>
-        <aside class="panel" aria-labelledby="savedDetailsTitle">
+        <aside class="panel" id="savedDetails" aria-labelledby="savedDetailsTitle">
           <h2 id="savedDetailsTitle">Saved Details</h2>
           <p class="muted" id="profileStorageNote" style="font-size:13px;margin:-8px 0 18px">Used to fill in checkout faster. Stored only on this device until you sign in.</p>
           <form id="profileForm" novalidate>
