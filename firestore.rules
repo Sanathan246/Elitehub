@@ -13,8 +13,29 @@ service cloud.firestore {
 
   function adminOrderUpdate() {
     return isAdmin()
+      && (resource.data.status != 'Cancelled' || request.resource.data.status == 'Cancelled')
       && request.resource.data.diff(resource.data).affectedKeys()
         .hasOnly(['status', 'carrier', 'trackingNumber', 'trackingUrl', 'updatedAt']);
+  }
+
+  function customerCancelOrder(userId) {
+    return isOwner(userId)
+      && resource.data.status in ['Placed', 'Payment pending', 'Paid', 'Processing']
+      && request.resource.data.status == 'Cancelled'
+      && request.resource.data.cancelledAt == request.time
+      && request.resource.data.updatedAt == request.time
+      && request.resource.data.diff(resource.data).affectedKeys()
+        .hasOnly(['status', 'cancelledAt', 'updatedAt']);
+  }
+
+  function customerConfirmPayment(userId) {
+    return isOwner(userId)
+      && resource.data.status == 'Payment pending'
+      && request.resource.data.status == 'Paid'
+      && request.resource.data.paymentId is string
+      && request.resource.data.paymentId.size() > 0
+      && request.resource.data.diff(resource.data).affectedKeys()
+        .hasOnly(['status', 'paymentId', 'updatedAt']);
   }
 
   match /databases/{database}/documents {
@@ -25,7 +46,9 @@ service cloud.firestore {
     match /users/{userId}/orders/{orderId} {
       allow read: if isOwner(userId) || isAdmin();
       allow create, delete: if isOwner(userId);
-      allow update: if isOwner(userId) || adminOrderUpdate();
+      allow update: if customerCancelOrder(userId)
+        || customerConfirmPayment(userId)
+        || adminOrderUpdate();
     }
 
     match /{path=**}/orders/{orderId} {

@@ -19,6 +19,7 @@
     saveOrder() { return Promise.reject(unavailableError()); },
     listOrders() { return Promise.resolve([]); },
     subscribeOrders() { return () => {}; },
+    cancelOrder() { return Promise.reject(unavailableError()); },
     listAllOrders() { return Promise.reject(unavailableError()); },
     updateOrder() { return Promise.reject(unavailableError()); }
   });
@@ -143,6 +144,14 @@
           },
           typeof onError === 'function' ? onError : (error) => console.error('Firebase order subscription failed.', error)
         );
+      },
+      cancelOrder(uid, orderId) {
+        if (!uid || !orderId) return Promise.reject(new Error('A signed-in customer and order ID are required.'));
+        return firestoreModule.updateDoc(firestoreModule.doc(db, 'users', uid, 'orders', orderId), {
+          status: 'Cancelled',
+          cancelledAt: firestoreModule.serverTimestamp(),
+          updatedAt: firestoreModule.serverTimestamp()
+        });
       },
       listAllOrders() {
         return firestoreModule.getDocs(firestoreModule.collectionGroup(db, 'orders')).then((snapshot) => snapshot.docs

@@ -25,6 +25,8 @@ Only the Firebase web app configuration belongs in the browser. The administrato
 - Customers must use an account before checkout. Create one with the configured administrator email if needed, then verify that email in **Firebase Console → Authentication → Users** before accessing the admin page.
 - Customers see saved fulfillment and tracking changes in **My Orders** after refreshing their account page.
 - The account page subscribes to the signed-in customer's Firestore orders, so administrator changes to status or tracking details appear there automatically while the page is open.
+- Customers can cancel their own orders while the status is **Placed**, **Payment pending**, **Paid**, or **Processing**. Once an order is **Shipped** or **Delivered**, the customer must contact support instead. Cancellation is terminal and cannot be undone.
+- Cancellation does not automatically refund online payments. Paid-order refunds must be handled separately by the store.
 - Orders placed before this change by guests exist only in that guest's browser and cannot be recovered into Firestore by the admin page.
 - Netlify publishes the static website but does not deploy Firestore security rules. Publish `firestore.rules` separately from the Firebase Console (**Firestore Database → Rules**) or with the Firebase CLI.
 

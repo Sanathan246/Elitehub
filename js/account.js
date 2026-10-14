@@ -105,6 +105,12 @@
         const orderId = String(o.id || 'Unavailable');
         const status = String(o.status || 'Placed');
         const statusClass = status.toLowerCase() === 'paid' ? 'paid' : '';
+        const canCancel = authUser && ['Placed', 'Payment pending', 'Paid', 'Processing'].includes(status);
+        const cancellationNote = status === 'Cancelled'
+          ? `<p class="muted" style="font-size:12px;margin:0 0 14px">This order is cancelled.${o.paymentId ? ' Any payment refund must be processed separately; it is not automatic.' : ''}</p>`
+          : ['Shipped', 'Delivered'].includes(status)
+            ? `<p class="muted" style="font-size:12px;margin:0 0 14px">This order has shipped and can no longer be cancelled. <a class="gold" href="contact.html">Contact support</a> for help.</p>`
+            : '';
         return `<article class="order">
         <div class="order-head">
           <div>Order<b>#${EH.esc(orderId)}</b></div>
@@ -114,9 +120,11 @@
         </div>
         <div class="order-body">${EH.orderItemsHTML(o.items, true)}
           ${o.carrier || o.trackingNumber || o.trackingUrl ? `<div class="order-tracking" style="margin-top:12px;font-size:13px;color:var(--muted)"><strong style="color:var(--text)">Shipping</strong>${o.carrier ? ` · ${EH.esc(o.carrier)}` : ''}${o.trackingNumber ? ` · Tracking: ${EH.esc(o.trackingNumber)}` : ''}${safeTrackingLink(o.trackingUrl)}</div>` : ''}
+          ${cancellationNote}
         </div>
         <div class="order-actions">
           <button class="btn btn-outline btn-sm" type="button" data-reorder="${i}">${EH.icon('returns')} Order Again</button>
+          ${canCancel ? `<button class="btn btn-ghost btn-sm" type="button" data-cancel-order="${i}">Cancel order</button>` : ''}
           ${C.whatsappNumber ? `<a class="btn btn-ghost btn-sm" href="${EH.waLink(`Hi ${C.brandName}! Could I get an update on my order #${orderId}?`)}" target="_blank" rel="noopener">${EH.icon('whatsapp')} Ask for an update</a>` : `<a class="btn btn-ghost btn-sm" href="${EH.mailLink('Order ' + orderId, `Hi ${C.brandName}! Could I get an update on my order #${orderId}?`)}">${EH.icon('mail')} Ask for an update</a>`}
         </div>
       </article>`;
@@ -134,6 +142,11 @@
     }
 
     box.addEventListener('click', (e) => {
+      const cancelButton = e.target.closest('[data-cancel-order]');
+      if (cancelButton) {
+        cancelOrder(Number(cancelButton.dataset.cancelOrder), cancelButton);
+        return;
+      }
       const b = e.target.closest('[data-reorder]');
       if (!b) return;
       const o = readOrders()[Number(b.dataset.reorder)];
@@ -161,6 +174,35 @@
       if (added) EH.toast('Items added to your bag', { action: { label: 'View bag', onClick: EH.openCart } });
       else EH.toast('Those items are already in your bag or no longer available.', { type: 'error' });
     });
+
+    async function cancelOrder(index, button) {
+      const order = readOrders()[index];
+      if (!authUser || !firebaseApi || !firebaseApi.enabled) {
+        EH.toast('Sign in to cancel an order.', { type: 'error' });
+        return;
+      }
+      if (!order || !['Placed', 'Payment pending', 'Paid', 'Processing'].includes(String(order.status || 'Placed'))) {
+        EH.toast('This order can no longer be cancelled online. Contact support for help.', { type: 'error' });
+        return;
+      }
+      const message = order.paymentId
+        ? `Cancel order #${EH.esc(order.id)}? The cancellation will be recorded, but payment refunds are not processed automatically and must be handled separately.`
+        : `Cancel order #${EH.esc(order.id)}? You can’t undo this action.`;
+      if (!(await EH.confirm('Cancel this order?', message, 'Cancel Order'))) return;
+      button.disabled = true;
+      try {
+        await firebaseApi.cancelOrder(authUser.uid, order.id);
+        EH.toast(order.paymentId
+          ? 'Order cancelled. Any payment refund must be processed separately.'
+          : 'Your order has been cancelled.');
+      } catch (error) {
+        console.error('Order cancellation failed.', error);
+        EH.toast(error && error.code === 'permission-denied'
+          ? 'This order has already shipped or changed. Refresh your orders and contact support if you need help.'
+          : 'We could not cancel this order. Please try again or contact support.', { type: 'error' });
+        button.disabled = false;
+      }
+    }
 
     /* saved details */
     const prof = EH.store.get('eh_profile', {}) || {};
