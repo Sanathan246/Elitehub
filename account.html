@@ -1,0 +1,123 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>My Orders — EliteHub</title>
+  <meta name="robots" content="noindex">
+  <meta name="theme-color" content="#070609">
+  <link rel="icon" type="image/png" href="assets/favicon.png">
+  <link rel="apple-touch-icon" href="assets/apple-touch-icon.png">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@400;500;600;700&family=Montserrat:wght@300;400;500;600;700&family=Great+Vibes&family=Kaushan+Script&family=Bebas+Neue&family=Permanent+Marker&display=swap">
+  <link rel="stylesheet" href="css/style.css">
+  <script>document.documentElement.classList.add('js');</script>
+</head>
+<body data-page="account">
+  <div id="site-header"></div>
+
+  <main>
+    <section class="page-hero">
+      <div class="hero-bg"></div>
+      <div class="stars" data-stars="80"></div>
+      <div class="container">
+        <nav class="crumbs" aria-label="Breadcrumb"><a href="index.html">Home</a><span class="sep">/</span><span>My Account</span></nav>
+        <h1>My <span class="gold-text">Orders</span></h1>
+        <p>Orders placed here or saved to your account, your delivery details and your custom design files.</p>
+      </div>
+    </section>
+
+    <section class="section account-access" aria-labelledby="accountAccessTitle">
+      <div class="container">
+        <div class="account-auth panel" id="authPanel">
+          <div class="account-auth-copy">
+            <p class="eyebrow">Private account</p>
+            <h2 id="accountAccessTitle">Keep your <span class="gold-text">Elite</span> details close</h2>
+            <p class="muted" id="authDescription">Create an account to securely sync your saved delivery details across devices.</p>
+            <ul class="account-benefits">
+              <li><span aria-hidden="true">&#10003;</span> Faster checkout on every device</li>
+              <li><span aria-hidden="true">&#10003;</span> Your profile is protected by Firebase Authentication</li>
+              <li><span aria-hidden="true">&#10003;</span> Your password is never stored by this website</li>
+            </ul>
+            <p class="account-page-links">Prefer a dedicated form? <a href="login.html">Sign in</a> or <a href="signup.html">create an account</a>.</p>
+          </div>
+          <div class="account-auth-box">
+            <div class="auth-tabs" role="tablist" aria-label="Account access">
+              <button class="auth-tab active" type="button" role="tab" aria-selected="true" data-auth-mode="login">Sign in</button>
+              <button class="auth-tab" type="button" role="tab" aria-selected="false" data-auth-mode="signup">Create account</button>
+            </div>
+            <form id="authForm" novalidate>
+              <div class="field auth-name-field" hidden>
+                <label for="authName">Full name</label>
+                <input class="input" id="authName" name="authName" autocomplete="name">
+                <span class="err-msg">Please enter your name.</span>
+              </div>
+              <div class="field">
+                <label for="authEmail">Email address</label>
+                <input class="input" id="authEmail" name="authEmail" type="email" autocomplete="email" required aria-describedby="authEmailError">
+                <span class="err-msg" id="authEmailError">Please enter a valid email address.</span>
+              </div>
+              <div class="field">
+                <label for="authPassword">Password</label>
+                <input class="input" id="authPassword" name="authPassword" type="password" autocomplete="current-password" minlength="6" required aria-describedby="authPasswordError">
+                <span class="err-msg" id="authPasswordError">Use at least 6 characters.</span>
+              </div>
+              <div class="field auth-confirm-field" hidden>
+                <label for="authConfirm">Confirm password</label>
+                <input class="input" id="authConfirm" name="authConfirm" type="password" autocomplete="new-password" minlength="6" aria-describedby="authConfirmError">
+                <span class="err-msg" id="authConfirmError">Passwords must match.</span>
+              </div>
+              <div class="auth-actions">
+                <button class="btn btn-gold btn-block" id="authSubmit" type="submit">Sign in</button>
+                <button class="link-button" id="resetPassword" type="button">Forgot password?</button>
+              </div>
+              <p class="form-note" id="authNote" role="status" aria-live="polite"></p>
+            </form>
+            <div class="auth-session" id="authSession" hidden>
+              <p class="eyebrow">Signed in</p>
+              <p class="auth-session-email" id="authUserEmail"></p>
+              <p class="muted">Your saved details can now sync securely to your account.</p>
+              <button class="btn btn-ghost btn-block" id="authSignOut" type="button">Sign out</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="section">
+      <div class="container" style="display:grid;grid-template-columns:minmax(0,1.6fr) minmax(280px,1fr);gap:30px;align-items:start" id="accountGrid">
+        <div class="orders" id="orders"></div>
+        <aside class="panel" aria-labelledby="savedDetailsTitle">
+          <h2 id="savedDetailsTitle">Saved Details</h2>
+          <p class="muted" id="profileStorageNote" style="font-size:13px;margin:-8px 0 18px">Used to fill in checkout faster. Stored only on this device until you sign in.</p>
+          <form id="profileForm" novalidate>
+            <div class="form-grid" style="grid-template-columns:1fr">
+              <div class="field"><label for="p-name">Full name</label><input class="input" id="p-name" name="name" autocomplete="name" aria-describedby="p-name-error"><span class="err-msg" id="p-name-error">Please enter at least 2 characters.</span></div>
+              <div class="field"><label for="p-phone">Mobile</label><input class="input" id="p-phone" name="phone" type="tel" inputmode="tel" autocomplete="tel" aria-describedby="p-phone-error"><span class="err-msg" id="p-phone-error">Please enter a valid mobile number.</span></div>
+              <div class="field"><label for="p-email">Email</label><input class="input" id="p-email" name="email" type="email" autocomplete="email" aria-describedby="p-email-error"><span class="err-msg" id="p-email-error">Please enter a valid email address.</span></div>
+              <div class="field"><label for="p-address1">Address</label><input class="input" id="p-address1" name="address1" autocomplete="address-line1" aria-describedby="p-address1-error"><span class="err-msg" id="p-address1-error">Please enter at least 4 characters.</span></div>
+              <div class="field"><label for="p-address2">Area, landmark</label><input class="input" id="p-address2" name="address2" autocomplete="address-line2"></div>
+              <div class="field"><label for="p-city">City</label><input class="input" id="p-city" name="city" autocomplete="address-level2" aria-describedby="p-city-error"><span class="err-msg" id="p-city-error">Please enter at least 2 characters.</span></div>
+              <div class="field"><label for="p-pincode">PIN code</label><input class="input" id="p-pincode" name="pincode" inputmode="numeric" maxlength="6" pattern="[1-9][0-9]{5}" autocomplete="postal-code" aria-describedby="p-pincode-error"><span class="err-msg" id="p-pincode-error">Please enter a valid 6-digit PIN code.</span></div>
+              <div class="field"><label for="p-state">State</label><input class="input" id="p-state" name="state" autocomplete="address-level1" aria-describedby="p-state-error"><span class="err-msg" id="p-state-error">Please enter a state.</span></div>
+            </div>
+            <button class="btn btn-gold btn-block" type="submit" style="margin-top:20px">Save Details</button>
+            <button class="btn btn-ghost btn-block btn-sm" type="button" id="clearData" style="margin-top:10px">Clear saved data</button>
+            <p class="form-note" id="profileNote" role="status" aria-live="polite"></p>
+          </form>
+        </aside>
+      </div>
+    </section>
+  </main>
+
+  <div id="site-footer"></div>
+
+  <script src="js/config.js"></script>
+  <script src="js/mockups.js"></script>
+  <script src="js/products.js"></script>
+  <script src="js/app.js"></script>
+  <script type="module" src="js/firebase.js"></script>
+  <script src="js/account.js"></script>
+</body>
+</html>

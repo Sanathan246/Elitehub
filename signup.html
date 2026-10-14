@@ -1,0 +1,80 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Create an account — EliteHub</title>
+  <meta name="robots" content="noindex">
+  <meta name="theme-color" content="#070609">
+  <link rel="icon" type="image/png" href="assets/favicon.png">
+  <link rel="apple-touch-icon" href="assets/apple-touch-icon.png">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@400;500;600;700&family=Montserrat:wght@300;400;500;600;700&family=Great+Vibes&family=Kaushan+Script&family=Bebas+Neue&family=Permanent+Marker&display=swap">
+  <link rel="stylesheet" href="css/style.css">
+  <script>document.documentElement.classList.add('js');</script>
+</head>
+<body class="auth-page" data-page="account" data-auth-mode="signup">
+  <div id="site-header"></div>
+
+  <main class="auth-screen">
+    <div class="auth-screen-bg"><div class="stars" data-stars="65"></div></div>
+    <div class="container auth-screen-layout">
+      <section class="auth-screen-copy" aria-labelledby="authPageTitle">
+        <p class="eyebrow">Make it yours</p>
+        <h1 id="authPageTitle">A little more <span class="gold-text">Elite.</span></h1>
+        <p>Create an account to save your delivery details and keep your order history ready wherever you shop.</p>
+        <div class="auth-promise"><span aria-hidden="true">✦</span><span>Your password is handled securely by Firebase Authentication.</span></div>
+      </section>
+
+      <section class="auth-page-card panel" aria-labelledby="authFormTitle">
+        <a class="auth-back-link" href="account.html">← My orders</a>
+        <p class="eyebrow">Join EliteHub</p>
+        <h2 id="authFormTitle">Create account</h2>
+        <p class="auth-card-intro">A few details, then you’re ready to go.</p>
+        <form id="authPageForm" novalidate>
+          <div class="field auth-page-name">
+            <label for="authPageName">Full name</label>
+            <input class="input" id="authPageName" name="name" autocomplete="name" aria-describedby="authPageNameError">
+            <span class="err-msg" id="authPageNameError">Please enter at least 2 characters.</span>
+          </div>
+          <div class="field">
+            <label for="authPageEmail">Email address</label>
+            <input class="input" id="authPageEmail" name="email" type="email" autocomplete="email" required aria-describedby="authPageEmailError">
+            <span class="err-msg" id="authPageEmailError">Please enter a valid email address.</span>
+          </div>
+          <div class="field">
+            <label for="authPagePassword">Password</label>
+            <input class="input" id="authPagePassword" name="password" type="password" autocomplete="new-password" minlength="6" required aria-describedby="authPagePasswordError">
+            <span class="err-msg" id="authPagePasswordError">Use at least 6 characters.</span>
+          </div>
+          <div class="field auth-page-confirm">
+            <label for="authPageConfirm">Confirm password</label>
+            <input class="input" id="authPageConfirm" name="confirm" type="password" autocomplete="new-password" minlength="6" aria-describedby="authPageConfirmError">
+            <span class="err-msg" id="authPageConfirmError">Passwords must match.</span>
+          </div>
+          <div class="auth-page-actions">
+            <button class="btn btn-gold btn-block" id="authPageSubmit" type="submit">Create account</button>
+          </div>
+          <p class="form-note" id="authPageNote" role="status" aria-live="polite"></p>
+        </form>
+        <div class="auth-page-session" id="authPageSession" hidden>
+          <p class="eyebrow">You’re signed in</p>
+          <p class="auth-session-email" id="authPageUser"></p>
+          <a class="btn btn-gold btn-block" href="account.html">Go to my account</a>
+          <button class="btn btn-ghost btn-block" id="authPageSignOut" type="button">Sign out</button>
+        </div>
+        <p class="auth-switch">Already have an account? <a href="login.html">Sign in</a></p>
+      </section>
+    </div>
+  </main>
+
+  <div id="site-footer"></div>
+  <script src="js/config.js"></script>
+  <script src="js/mockups.js"></script>
+  <script src="js/products.js"></script>
+  <script src="js/app.js"></script>
+  <script type="module" src="js/firebase.js"></script>
+  <script src="js/auth-page.js"></script>
+</body>
+</html>

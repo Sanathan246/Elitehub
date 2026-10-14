@@ -1,0 +1,76 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Contact — EliteHub | Luxury Customizations</title>
+  <meta name="description" content="Questions, bulk or corporate orders, or help with a custom design? Get in touch with the EliteHub team.">
+  <meta name="theme-color" content="#070609">
+  <link rel="icon" type="image/png" href="assets/favicon.png">
+  <link rel="apple-touch-icon" href="assets/apple-touch-icon.png">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@400;500;600;700&family=Montserrat:wght@300;400;500;600;700&family=Great+Vibes&family=Kaushan+Script&family=Bebas+Neue&family=Permanent+Marker&display=swap">
+  <link rel="stylesheet" href="css/style.css">
+  <script>document.documentElement.classList.add('js');</script>
+</head>
+<body data-page="contact">
+  <div id="site-header"></div>
+
+  <main>
+    <section class="page-hero">
+      <div class="hero-bg"></div>
+      <div class="stars" data-stars="80"></div>
+      <div class="container">
+        <nav class="crumbs" aria-label="Breadcrumb"><a href="index.html">Home</a><span class="sep">/</span><span>Contact</span></nav>
+        <h1>Get in <span class="gold-text">Touch</span></h1>
+        <p>Questions about an order, a bulk or corporate request, or help bringing your idea to life — we’d love to hear from you.</p>
+      </div>
+    </section>
+
+    <section class="section">
+      <div class="container contact-grid">
+        <div class="contact-cards reveal" id="contactCards"></div>
+        <div class="panel reveal d1">
+          <h2>Send a Message</h2>
+          <form id="contactForm" novalidate>
+            <div class="form-grid">
+              <div class="field"><label for="c-name">Your name <span class="req">*</span></label><input class="input" id="c-name" name="name" autocomplete="name" required><span class="err-msg">Please enter your name.</span></div>
+              <div class="field"><label for="c-email">Email <span class="req">*</span></label><input class="input" id="c-email" name="email" type="email" autocomplete="email" required><span class="err-msg">Please enter a valid email address.</span></div>
+              <div class="field"><label for="c-phone">Phone <span class="muted">(optional)</span></label><input class="input" id="c-phone" name="phone" type="tel" autocomplete="tel"></div>
+              <div class="field"><label for="c-topic">Topic</label>
+                <select class="select" id="c-topic" name="topic">
+                  <option>General enquiry</option>
+                  <option>Custom design help</option>
+                  <option>Bulk / corporate order</option>
+                  <option>Order status</option>
+                  <option>Returns &amp; exchanges</option>
+                  <option>Collaboration</option>
+                </select>
+              </div>
+              <div class="field full"><label for="c-message">Message <span class="req">*</span></label><textarea class="textarea" id="c-message" name="message" rows="5" placeholder="Tell us what you have in mind…" required></textarea><span class="err-msg">Please write a short message (at least 10 characters).</span></div>
+            </div>
+            <button class="btn btn-gold" type="submit" style="margin-top:20px" id="contactBtn">Send Message <i data-icon="arrow" class="ico-arrow"></i></button>
+            <p class="form-note" id="contactNote" aria-live="polite"></p>
+          </form>
+        </div>
+      </div>
+    </section>
+
+    <section class="section" style="padding-top:0">
+      <div class="container faq">
+        <div class="section-head reveal" style="justify-content:center;text-align:center"><h2 class="section-title">Frequently <em>Asked</em></h2></div>
+        <div class="accordion reveal" id="faq"></div>
+      </div>
+    </section>
+  </main>
+
+  <div id="site-footer"></div>
+
+  <script src="js/config.js"></script>
+  <script src="js/mockups.js"></script>
+  <script src="js/products.js"></script>
+  <script src="js/app.js"></script>
+  <script src="js/contact.js"></script>
+</body>
+</html>

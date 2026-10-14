@@ -1,0 +1,141 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+<title>EliteHub</title>
+  <meta name="description" content="EliteHub turns your ideas into premium custom-printed tees, hoodies, mugs, phone cases and home décor. Design your own or shop trending prints.">
+  <meta name="theme-color" content="#070609">
+  <meta property="og:type" content="website">
+  <meta property="og:title" content="EliteHub — Luxury Customizations">
+  <meta property="og:description" content="Wear your imagination. Premium custom-printed clothing and gifts.">
+  <meta property="og:image" content="assets/logo-original.jpg">
+  <link rel="icon" type="image/png" href="assets/favicon.png">
+  <link rel="apple-touch-icon" href="assets/apple-touch-icon.png">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@400;500;600;700&family=Montserrat:wght@300;400;500;600;700&family=Great+Vibes&family=Kaushan+Script&family=Bebas+Neue&family=Permanent+Marker&display=swap">
+  <link rel="stylesheet" href="css/style.css">
+  <script>document.documentElement.classList.add('js');</script>
+  
+</head>
+<body data-page="home">
+  <div id="site-header"></div>
+
+  <main>
+    <!-- HERO -->
+    <section class="hero" aria-label="Welcome">
+      <div class="hero-bg"></div>
+      <div class="stars" data-stars="170"></div>
+      <div class="hero-flow" data-flow></div>
+      <div class="hero-mountains" data-mountains="hero"></div>
+      <div class="container hero-inner">
+        <div class="hero-copy">
+          <span class="eyebrow reveal">Wear Your</span>
+          <h1 class="hero-title gold-text reveal d1">Imagination</h1>
+          <p class="hero-lead reveal d2">Custom print clothing &amp; products that turn your ideas into reality.</p>
+          <a class="btn btn-gold reveal d3" href="shop.html">Shop Now <i data-icon="arrow" class="ico-arrow"></i></a>
+          <div class="hero-features reveal d4">
+            <div class="feat"><span class="feat-ico"><i data-icon="gem"></i></span><div><strong>Premium Quality</strong><span>Long Lasting Prints</span></div></div>
+            <div class="feat"><span class="feat-ico"><i data-icon="palette"></i></span><div><strong>Custom Designs</strong><span>Your Wish, Our Print</span></div></div>
+            <div class="feat"><span class="feat-ico"><i data-icon="globe"></i></span><div><strong>Worldwide Shipping</strong><span>To Your Doorstep</span></div></div>
+          </div>
+        </div>
+        <div class="hero-visual reveal d2">
+          <div class="hero-glow"></div>
+          <div class="hero-arc"></div>
+          <div id="heroVisual" style="display:contents"></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- COLLECTIONS -->
+    <section class="section" aria-labelledby="collections-title">
+      <div class="container collections">
+        <div class="collections-copy reveal">
+          <span class="eyebrow">Explore Our</span>
+          <h2 class="section-title" id="collections-title">Collections</h2>
+          <p>From trendy apparel to unique accessories, make it yours. Print it your way.</p>
+          <a class="btn btn-outline btn-sm" href="shop.html">Browse All <i data-icon="arrow" class="ico-arrow"></i></a>
+        </div>
+        <div class="collection-grid" id="collectionGrid"></div>
+      </div>
+    </section>
+
+    <div class="container"><hr class="divider"></div>
+
+    <!-- TRENDING -->
+    <section class="section" aria-labelledby="trending-title">
+      <div class="container">
+        <div class="section-head reveal">
+          <h2 class="section-title" id="trending-title">Trending <em>Now</em></h2>
+          <a class="link-arrow" href="shop.html?tag=trending">View All <i data-icon="arrow"></i></a>
+        </div>
+        <div class="product-grid" id="trendingGrid"></div>
+      </div>
+    </section>
+
+    <!-- YOUR IDEA, OUR PRINT -->
+    <section class="studio-band" aria-labelledby="studio-title">
+      <div class="stars" data-stars="70"></div>
+      <div class="container studio-band-inner">
+        <div class="studio-copy reveal">
+          <h2 id="studio-title">Your Idea<br><span class="gold-text">Our Print</span></h2>
+          <p>Create something truly yours. Add your text, artwork or photo and we'll bring it to life.</p>
+          <a class="btn btn-gold btn-sm" id="demoCta" href="customize.html">Customize Now <i data-icon="arrow" class="ico-arrow"></i></a>
+        </div>
+        <div class="studio-demo reveal d1">
+          <div class="orbit o1"></div>
+          <div class="orbit o2"></div>
+          <div class="demo-tee" id="demoTee"></div>
+          <label class="chip c-text"><span class="chip-title"><i data-icon="type"></i> Add Text</span><input id="demoText" value="Good Vibes" maxlength="16" aria-label="Type your text to preview it on the tee"></label>
+          <button class="chip c-upload" id="demoUpload" type="button" aria-label="Upload an image to preview it on the tee"><span class="chip-title"><i data-icon="image"></i> Upload Image</span><span class="chip-row"><span class="thumb" id="demoThumb"><i data-icon="upload"></i></span><span class="bar"></span></span></button>
+          <input type="file" id="demoFile" accept="image/png,image/jpeg,image/webp" hidden>
+          <span class="chip c-pill"><i data-icon="checkCircle"></i> <span id="demoPill">Live preview</span></span>
+        </div>
+        <ol class="steps reveal d2">
+          <li><span class="num"><i data-icon="type"></i></span>Add Text</li>
+          <li><span class="num"><i data-icon="image"></i></span>Upload Image</li>
+          <li><span class="num"><i data-icon="shirt"></i></span>Choose Product</li>
+          <li><span class="num"><i data-icon="eye"></i></span>Preview &amp; Order</li>
+        </ol>
+      </div>
+    </section>
+
+    <!-- WHY CHOOSE US -->
+    <section class="why" aria-labelledby="why-title">
+      <div class="container">
+        <div class="why-head reveal"><h3 id="why-title">Why Choose Us</h3></div>
+        <div class="why-grid">
+          <div class="feat reveal d1"><span class="feat-ico"><i data-icon="shirt"></i></span><div><strong>Premium Fabrics</strong><span>Comfort Meets Style</span></div></div>
+          <div class="feat reveal d2"><span class="feat-ico"><i data-icon="sparkles"></i></span><div><strong>High-Quality Print</strong><span>Vibrant &amp; Long Lasting</span></div></div>
+          <div class="feat reveal d3"><span class="feat-ico"><i data-icon="lock"></i></span><div><strong>Secure Payments</strong><span>Shop with Confidence</span></div></div>
+          <div class="feat reveal d4"><span class="feat-ico"><i data-icon="returns"></i></span><div><strong>Easy Returns</strong><span>Hassle Free</span></div></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- NEWSLETTER -->
+    <section class="newsletter" aria-labelledby="news-title">
+      <div class="newsletter-bg"><div class="stars" data-stars="90"></div><div class="nb-mountains" data-mountains="news"></div></div>
+      <div class="container reveal">
+        <h3 id="news-title">Stay Connected</h3>
+        <p>Get exclusive offers, new drops and more.</p>
+        <form class="news-form" data-newsletter novalidate>
+          <input type="email" placeholder="Enter your email address" aria-label="Email address" autocomplete="email" required>
+          <button class="btn btn-gold" type="submit">Subscribe</button>
+        </form>
+        <p class="form-note" aria-live="polite"></p>
+      </div>
+    </section>
+  </main>
+
+  <div id="site-footer"></div>
+
+  <script src="js/config.js"></script>
+  <script src="js/mockups.js"></script>
+  <script src="js/products.js"></script>
+  <script src="js/app.js"></script>
+  <script src="js/home.js"></script>
+
+</body></html>

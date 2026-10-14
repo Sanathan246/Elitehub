@@ -1,0 +1,79 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Checkout — EliteHub</title>
+  <meta name="robots" content="noindex">
+  <meta name="theme-color" content="#070609">
+  <link rel="icon" type="image/png" href="assets/favicon.png">
+  <link rel="apple-touch-icon" href="assets/apple-touch-icon.png">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@400;500;600;700&family=Montserrat:wght@300;400;500;600;700&family=Great+Vibes&family=Kaushan+Script&family=Bebas+Neue&family=Permanent+Marker&display=swap">
+  <link rel="stylesheet" href="css/style.css">
+  <script>document.documentElement.classList.add('js');</script>
+</head>
+<body data-page="checkout" data-header="solid">
+  <div id="site-header"></div>
+
+  <main class="container" id="checkoutRoot">
+    <div class="checkout" id="checkoutView">
+      <div>
+        <nav class="crumbs" aria-label="Breadcrumb"><a href="index.html">Home</a><span class="sep">/</span><a href="#" data-open-cart>Bag</a><span class="sep">/</span><span>Checkout</span></nav>
+        <h1 class="display" style="font-size:clamp(38px,4.4vw,56px);margin-bottom:26px">Checkout</h1>
+        <p class="preview-note">This is a preview of the EliteHub store. Orders placed here are not sent or charged.</p>
+        <form id="checkoutForm" novalidate>
+          <div class="panel">
+            <h2><span class="step-n">1</span> Contact</h2>
+            <div class="form-grid">
+              <div class="field full"><label for="f-name">Full name <span class="req">*</span></label><input class="input" id="f-name" name="name" autocomplete="name" required><span class="err-msg">Please enter your full name.</span></div>
+              <div class="field"><label for="f-phone">Mobile number <span class="req">*</span></label><input class="input" id="f-phone" name="phone" type="tel" inputmode="tel" autocomplete="tel" placeholder="10-digit mobile" required><span class="err-msg">Please enter a valid 10-digit mobile number.</span></div>
+              <div class="field"><label for="f-email">Email <span class="req">*</span></label><input class="input" id="f-email" name="email" type="email" autocomplete="email" required><span class="err-msg">Please enter a valid email address.</span></div>
+            </div>
+          </div>
+
+          <div class="panel">
+            <h2><span class="step-n">2</span> Shipping Address</h2>
+            <div class="form-grid">
+              <div class="field full"><label for="f-address1">House / flat, street <span class="req">*</span></label><input class="input" id="f-address1" name="address1" autocomplete="address-line1" required><span class="err-msg">Please enter your address.</span></div>
+              <div class="field full"><label for="f-address2">Area, landmark <span class="muted">(optional)</span></label><input class="input" id="f-address2" name="address2" autocomplete="address-line2"></div>
+              <div class="field"><label for="f-city">City <span class="req">*</span></label><input class="input" id="f-city" name="city" autocomplete="address-level2" required><span class="err-msg">Please enter your city.</span></div>
+              <div class="field"><label for="f-pincode">PIN code <span class="req">*</span></label><input class="input" id="f-pincode" name="pincode" inputmode="numeric" maxlength="6" autocomplete="postal-code" required><span class="err-msg">Please enter a valid 6-digit PIN code.</span></div>
+              <div class="field full"><label for="f-state">State <span class="req">*</span></label><select class="select" id="f-state" name="state" autocomplete="address-level1" required><option value="">Select state</option></select><span class="err-msg">Please select your state.</span></div>
+              <div class="field full"><label for="f-notes">Order notes <span class="muted">(optional)</span></label><textarea class="textarea" id="f-notes" name="notes" rows="3" placeholder="Gift message, delivery instructions or anything about your custom design…" style="min-height:90px"></textarea></div>
+              <label class="check full"><input type="checkbox" id="f-save" checked> Save these details for next time</label>
+            </div>
+          </div>
+
+          <div class="panel">
+            <h2><span class="step-n">3</span> Payment</h2>
+            <div class="pay-options" id="payOptions" role="radiogroup" aria-label="Payment method"></div>
+          </div>
+        </form>
+      </div>
+
+      <aside class="summary">
+        <div class="panel">
+          <h2>Order Summary</h2>
+          <div class="sum-items" id="sumItems"></div>
+          <div class="coupon"><input class="input" id="couponInput" placeholder="Coupon code" aria-label="Coupon code"><button class="btn btn-outline btn-sm" type="button" id="couponBtn">Apply</button></div>
+          <p class="form-note" id="couponNote" style="margin:-6px 0 12px"></p>
+          <div id="sumTotals"></div>
+          <button class="btn btn-gold btn-block" type="submit" form="checkoutForm" id="placeOrder" style="margin-top:18px">Place Order</button>
+          <p class="secure-note"><i data-icon="lock"></i> Your details are safe with us</p>
+        </div>
+      </aside>
+    </div>
+  </main>
+
+  <div id="site-footer"></div>
+
+  <script src="js/config.js"></script>
+  <script src="js/mockups.js"></script>
+  <script src="js/products.js"></script>
+  <script src="js/app.js"></script>
+  <script type="module" src="js/firebase.js"></script>
+  <script src="js/checkout.js"></script>
+</body>
+</html>

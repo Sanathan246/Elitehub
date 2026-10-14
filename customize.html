@@ -1,0 +1,117 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Design Studio — EliteHub | Make It Yours</title>
+  <meta name="description" content="Choose an EliteHub product, upload your artwork or 3D mockup, and preview your custom design in an interactive 3D viewer.">
+  <meta name="theme-color" content="#070609">
+  <link rel="icon" type="image/png" href="assets/favicon.png">
+  <link rel="apple-touch-icon" href="assets/apple-touch-icon.png">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@400;500;600;700&family=Montserrat:wght@300;400;500;600;700&display=swap">
+  <link rel="stylesheet" href="css/style.css">
+  <script>document.documentElement.classList.add('js');</script>
+</head>
+<body data-page="customize" data-header="solid">
+  <div id="site-header"></div>
+
+  <main class="container studio-page studio-redesign">
+    <header class="studio-intro">
+      <nav class="crumbs" aria-label="Breadcrumb"><a href="index.html">Home</a><span class="sep">/</span><span>Design Studio</span></nav>
+      <div class="studio-intro-row">
+        <div>
+          <span class="studio-kicker"><span class="studio-kicker-mark">EH</span> THE ELITEHUB DESIGN STUDIO</span>
+          <h1>Make it <span class="gold-text">yours.</span></h1>
+          <p>Choose a favourite. Add your artwork. See it come to life in 3D.</p>
+        </div>
+        <button class="btn btn-ghost btn-sm studio-reset" type="button" id="resetBtn"><i data-icon="returns"></i> Start over</button>
+      </div>
+      <ol class="studio-steps" aria-label="Customization steps">
+        <li class="current"><span>01</span> Choose a product</li><li><span>02</span> Add your design</li><li><span>03</span> See it in 3D</li>
+      </ol>
+    </header>
+
+    <section class="studio-catalog" aria-labelledby="catalogHeading">
+      <div class="studio-section-head">
+        <div><span class="studio-step-label">STEP 01</span><h2 id="catalogHeading">Pick your canvas</h2><p>Every EliteHub product, ready for your personal touch.</p></div>
+        <label class="studio-search"><i data-icon="search"></i><input type="search" id="productSearch" placeholder="Find a product" aria-label="Search products"></label>
+      </div>
+      <div class="studio-catalog-tools"><div class="studio-filters" id="categoryFilters" role="group" aria-label="Filter products"></div><span class="studio-result-count" id="productCount" aria-live="polite"></span></div>
+      <div class="studio-product-grid" id="productGrid" aria-live="polite"></div>
+    </section>
+
+    <section class="studio-workbench" id="studioWorkbench" aria-labelledby="workbenchHeading">
+      <div class="studio-section-head workbench-heading">
+        <div><span class="studio-step-label">STEP 02 &amp; 03</span><h2 id="workbenchHeading">Your custom preview</h2><p>Upload artwork, then explore your product from every angle.</p></div>
+        <span class="studio-secure-note"><i data-icon="shield"></i> Your artwork stays on this device</span>
+      </div>
+
+      <div class="studio-builder">
+        <section class="studio-viewer-card" aria-label="Interactive product preview">
+          <div class="studio-viewer-top"><div><span class="viewer-eyebrow"><i data-icon="sparkles"></i> INTERACTIVE 3D PREVIEW</span><strong id="viewerProductName">Oversized Tee</strong></div><span class="viewer-ready"><i></i> LIVE VIEW</span></div>
+          <div class="studio-viewer-stage" id="stageBox">
+            <div class="studio-viewer-glow" aria-hidden="true"></div>
+            <img id="staticPreview" class="studio-static-preview" alt="Static product preview" hidden>
+            <div class="product-preview-3d-mount" id="product3dMount"></div>
+            <div class="studio-viewer-loading" id="viewerStatus" role="status" aria-live="polite">Preparing your 3D preview…</div>
+            <div class="studio-viewer-caption"><span class="studio-preview-indicator"></span><span id="previewCaption">Drag to rotate · scroll or pinch to zoom</span></div>
+            <div class="studio-viewer-controls" role="group" aria-label="3D preview controls">
+              <button type="button" data-3d-action="left" aria-label="Rotate left" title="Rotate left">↶</button>
+              <button type="button" data-3d-action="reset" aria-label="Reset view" title="Reset view">Reset</button>
+              <button type="button" data-3d-action="auto" aria-label="Toggle automatic rotation" aria-pressed="false" title="Auto rotate">Auto</button>
+              <button type="button" data-3d-action="right" aria-label="Rotate right" title="Rotate right">↷</button>
+            </div>
+          </div>
+          <div class="studio-viewer-foot"><span><i data-icon="sparkles"></i> Real-time product rendering</span><span>Drag to rotate <b>·</b> Scroll to zoom</span></div>
+        </section>
+
+        <aside class="studio-customize-card" aria-label="Customize your product">
+          <div class="selected-product-line"><div class="selected-product-thumb" id="selectedProductThumb"></div><div><span class="studio-step-label">YOUR PRODUCT</span><h3 id="selectedProductName">Abstract Mind</h3><p id="selectedProductType">Oversized Tee</p></div><b id="selectedProductPrice">₹999</b></div>
+
+          <div class="studio-option-block" id="productOptions"></div>
+
+          <div class="studio-upload-section">
+            <div class="studio-upload-heading"><span class="studio-step-label">ADD YOUR ARTWORK</span><span class="upload-required">REQUIRED</span></div>
+            <label class="studio-dropzone" id="artDropzone" for="artFileInput" tabindex="0">
+              <span class="upload-icon-wrap"><i data-icon="upload"></i></span>
+              <strong>Drop your design here</strong><span>or <u>browse files</u> from your device</span>
+              <input type="file" id="artFileInput" accept=".png,.jpg,.jpeg,.webp,.svg,.glb,image/png,image/jpeg,image/webp,image/svg+xml,model/gltf-binary" hidden>
+            </label>
+            <p class="studio-format-line"><b>2D</b> PNG · JPG · WEBP · SVG <span>Up to 15 MB</span></p>
+            <p class="studio-format-line"><b>3D</b> GLB model <span>Up to 25 MB</span></p>
+            <div class="studio-upload-status" id="artUploadStatus" role="status" aria-live="polite">Transparent PNGs give the cleanest print.</div>
+            <div class="studio-uploaded-file" id="uploadedFileCard" hidden><span class="uploaded-file-icon"><i data-icon="image"></i></span><span class="uploaded-file-name" id="uploadedFileName"></span><span class="uploaded-file-size" id="uploadedFileSize"></span><button type="button" id="removeArtBtn" aria-label="Remove uploaded artwork">×</button></div>
+            <p class="studio-upload-tip"><i data-icon="checkCircle"></i> For crisp prints, use artwork at least 1500 px wide.</p>
+          </div>
+
+          <details class="studio-model-upload">
+            <summary><span class="model-summary-icon"><i data-icon="package"></i></span><span><b>Have your own 3D mockup?</b><small>Use your product model in the viewer</small></span><span class="model-summary-plus">+</span></summary>
+            <div class="model-upload-content">
+              <label class="model-file-button" for="modelFileInput"><i data-icon="upload"></i> Upload a 3D model<input type="file" id="modelFileInput" accept=".glb,model/gltf-binary" hidden></label>
+              <p>GLB only · up to 25 MB · textures embedded. Point the front of your model toward +Z.</p>
+              <div class="studio-upload-status" id="modelUploadStatus" role="status" aria-live="polite">The selected product model is ready to preview.</div>
+              <button class="model-clear-button" type="button" id="clearModelBtn" hidden>Use EliteHub's model</button>
+            </div>
+          </details>
+
+          <div class="studio-buy-box"><div class="studio-buy-total"><span>Subtotal</span><strong id="studioSubtotal">₹999</strong></div><label class="studio-qty"><span>Quantity</span><span><button type="button" data-qty="-1" aria-label="Decrease quantity">−</button><input type="number" min="1" max="20" value="1" id="studioQty" aria-label="Quantity"><button type="button" data-qty="1" aria-label="Increase quantity">+</button></span></label><button class="btn btn-gold btn-block studio-add-button" type="button" id="addCartBtn" disabled><i data-icon="bag"></i> Add custom design to bag</button><p id="addCartHint">Upload your artwork to continue.</p></div>
+        </aside>
+      </div>
+    </section>
+    <p class="studio-reassurance"><i data-icon="shield"></i> Printed just for you <span>·</span> Secure checkout <span>·</span> Free shipping on qualifying orders</p>
+  </main>
+
+  <div id="site-footer"></div>
+  <script src="js/config.js"></script>
+  <script src="js/mockups.js"></script>
+  <script src="js/products.js"></script>
+  <script src="js/app.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/GLTFLoader.js"></script>
+  <script src="js/customize-3d.js"></script>
+  <script src="js/design-studio.js"></script>
+</body>
+</html>
