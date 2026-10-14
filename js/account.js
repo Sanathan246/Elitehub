@@ -37,6 +37,7 @@
     let authBusy = false;
     let stopOrderUpdates = null;
     let visibleOrders = [];
+    const openOrderDetails = new Set();
 
     const setNote = (el, message, type = '') => {
       if (!el) return;
@@ -91,8 +92,37 @@
       return Number.isNaN(date.getTime()) ? 'Date unavailable' : dateFormatter.format(date);
     };
 
+    function orderProgressHTML(order) {
+      const status = String(order.status || 'Placed');
+      const stages = [
+        ['Order placed', 'We received your order.'],
+        ['Processing', 'Your order is being prepared.'],
+        ['Shipped', 'Your order is on the way.'],
+        ['Delivered', 'Your order has arrived.']
+      ];
+      const progress = {
+        'Placed': 0,
+        'Payment pending': 0,
+        'Paid': 1,
+        'Processing': 1,
+        'Shipped': 2,
+        'Delivered': 3
+      };
+      if (status === 'Cancelled') {
+        return `<p class="form-note err">This order was cancelled.${order.paymentId ? ' Any payment refund must be handled separately.' : ''}</p>`;
+      }
+      const current = Object.prototype.hasOwnProperty.call(progress, status) ? progress[status] : 0;
+      return `<ol class="tracking-steps account-order-progress">${stages.map(([title, description], index) => {
+        const state = index < current ? 'completed' : index === current ? 'current' : '';
+        const text = index === current && status === 'Payment pending' ? 'Complete payment to confirm your order.' : description;
+        return `<li class="tracking-step ${state}"><span class="tracking-marker" aria-hidden="true"></span><div><strong>${title}</strong><p>${text}</p></div></li>`;
+      }).join('')}</ol>`;
+    }
+
     function renderOrders(orders = readOrders()) {
       visibleOrders = orders;
+      const currentOrderIds = new Set(orders.map((order) => String(order.id || '')));
+      openOrderDetails.forEach((id) => { if (!currentOrderIds.has(id)) openOrderDetails.delete(id); });
       if (!orders.length) {
         const message = authUser ? 'Your orders will appear here after you place one.' : 'When you place an order on this device, it will appear here.';
         box.innerHTML = `<div class="empty-state">${EH.icon('package')}<h3>No orders yet</h3><p>${message}</p><a class="btn btn-gold btn-sm" href="shop.html">Start Shopping ${EH.icon('arrow', 'ico-arrow')}</a></div>`;
@@ -103,11 +133,12 @@
         const status = String(o.status || 'Placed');
         const statusClass = status.toLowerCase() === 'paid' ? 'paid' : '';
         const canCancel = authUser && ['Placed', 'Payment pending', 'Paid', 'Processing'].includes(status);
-        const cancellationNote = status === 'Cancelled'
-          ? `<p class="muted" style="font-size:12px;margin:0 0 14px">This order is cancelled.${o.paymentId ? ' Any payment refund must be processed separately; it is not automatic.' : ''}</p>`
-          : ['Shipped', 'Delivered'].includes(status)
-            ? `<p class="muted" style="font-size:12px;margin:0 0 14px">This order has shipped and can no longer be cancelled. <a class="gold" href="contact.html">Contact support</a> for help.</p>`
-            : '';
+        const orderAddress = [o.customer && o.customer.address1, o.customer && o.customer.address2, o.customer && o.customer.city, o.customer && o.customer.state, o.customer && o.customer.pincode].filter(Boolean).join(', ');
+        const itemCount = o.items.reduce((count, item) => count + Math.max(0, Number(item.qty) || 0), 0);
+        const expanded = openOrderDetails.has(orderId);
+        const deliveryNote = ['Shipped', 'Delivered'].includes(status)
+          ? `<p class="muted" style="font-size:12px;margin:0 0 14px">Need help with this shipment? <a class="gold" href="contact.html">Contact support</a>.</p>`
+          : '';
         return `<article class="order">
         <div class="order-head">
           <div>Order<b>#${EH.esc(orderId)}</b></div>
@@ -115,9 +146,34 @@
           <div>Total<b>${EH.money(o.totals.total)}</b></div>
           <span class="status ${statusClass}">${EH.esc(status)}</span>
         </div>
-        <div class="order-body">${EH.orderItemsHTML(o.items, true)}
-          ${o.carrier || o.trackingNumber || o.trackingUrl ? `<div class="order-tracking" style="margin-top:12px;font-size:13px;color:var(--muted)"><strong style="color:var(--text)">Shipping</strong>${o.carrier ? ` · ${EH.esc(o.carrier)}` : ''}${o.trackingNumber ? ` · Tracking: ${EH.esc(o.trackingNumber)}` : ''}${safeTrackingLink(o.trackingUrl)}</div>` : ''}
-          ${cancellationNote}
+        <div class="order-body account-order-summary">
+          <p class="muted" style="margin:0 0 12px">${itemCount} item${itemCount === 1 ? '' : 's'} · ${EH.esc(o.items.slice(0, 2).map((item) => item.name || 'Item').join(', '))}${o.items.length > 2 ? ` and ${o.items.length - 2} more` : ''}</p>
+          <button class="btn btn-ghost btn-sm" type="button" data-order-details="${i}" aria-expanded="${expanded}" aria-controls="order-details-${i}">${expanded ? 'Hide order details' : 'View order details'} <span aria-hidden="true">${expanded ? '−' : '+'}</span></button>
+        </div>
+        <div class="account-order-details${expanded ? ' is-open' : ''}" id="order-details-${i}" aria-hidden="${!expanded}" ${expanded ? '' : 'inert'}>
+          <div class="account-order-details-inner">
+            <div class="order-body">
+              <p class="eyebrow">Order progress</p>
+              ${orderProgressHTML(o)}
+              ${o.carrier || o.trackingNumber || o.trackingUrl ? `<div class="order-tracking" style="margin:0 0 18px;font-size:13px;color:var(--muted)"><strong style="color:var(--text)">Shipment</strong>${o.carrier ? ` · ${EH.esc(o.carrier)}` : ''}${o.trackingNumber ? ` · Tracking: ${EH.esc(o.trackingNumber)}` : ''}${safeTrackingLink(o.trackingUrl)}</div>` : ''}
+              ${deliveryNote}
+              <p class="eyebrow">Items (${itemCount})</p>
+              ${EH.orderItemsHTML(o.items, true)}
+              <div class="form-grid account-order-info" style="margin-top:18px">
+                <div>
+                  <p class="eyebrow">Delivery address</p>
+                  <p class="muted">${EH.esc(o.customer && o.customer.name || '')}${orderAddress ? `<br>${EH.esc(orderAddress)}` : ''}${o.customer && o.customer.phone ? `<br>${EH.esc(o.customer.phone)}` : ''}</p>
+                </div>
+                <div>
+                  <p class="eyebrow">Payment</p>
+                  <p class="muted">${EH.esc(EH.paymentLabel(o.payment))}${o.paymentId ? `<br>Reference: ${EH.esc(o.paymentId)}` : ''}</p>
+                </div>
+              </div>
+              ${EH.totalsHTML(o.totals || {})}
+              ${o.customer && o.customer.notes ? `<p class="muted" style="margin-top:14px"><strong>Order notes:</strong> ${EH.esc(o.customer.notes)}</p>` : ''}
+              ${status === 'Cancelled' && o.paymentId ? '<p class="form-note">This order is cancelled. Any payment refund must be processed separately; it is not automatic.</p>' : ''}
+            </div>
+          </div>
         </div>
         <div class="order-actions">
           <button class="btn btn-outline btn-sm" type="button" data-reorder="${i}">${EH.icon('returns')} Order Again</button>
@@ -139,6 +195,22 @@
     }
 
     box.addEventListener('click', (e) => {
+      const detailsButton = e.target.closest('[data-order-details]');
+      if (detailsButton) {
+        const order = visibleOrders[Number(detailsButton.dataset.orderDetails)];
+        if (!order) return;
+        const orderId = String(order.id || '');
+        const panel = document.getElementById(detailsButton.getAttribute('aria-controls'));
+        const open = !openOrderDetails.has(orderId);
+        if (open) openOrderDetails.add(orderId);
+        else openOrderDetails.delete(orderId);
+        detailsButton.setAttribute('aria-expanded', String(open));
+        detailsButton.innerHTML = `${open ? 'Hide order details' : 'View order details'} <span aria-hidden="true">${open ? '−' : '+'}</span>`;
+        panel.classList.toggle('is-open', open);
+        panel.setAttribute('aria-hidden', String(!open));
+        panel.inert = !open;
+        return;
+      }
       const cancelButton = e.target.closest('[data-cancel-order]');
       if (cancelButton) {
         cancelOrder(Number(cancelButton.dataset.cancelOrder), cancelButton);

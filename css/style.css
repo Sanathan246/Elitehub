@@ -596,6 +596,18 @@ a.contact-card:hover { border-color: var(--gold-line); transform: translateX(4px
 .status.paid { color: var(--success); border-color: rgba(103, 211, 154, 0.4); background: rgba(103, 211, 154, 0.08); }
 .order-body { padding: 8px 22px 18px; }
 .order-actions { display: flex; gap: 10px; flex-wrap: wrap; padding: 0 22px 20px; }
+.account-order-summary { padding-top: 16px; padding-bottom: 16px; }
+.account-order-details { display: grid; grid-template-rows: 0fr; opacity: 0; transition: grid-template-rows .35s ease, opacity .25s ease; }
+.account-order-details.is-open { grid-template-rows: 1fr; opacity: 1; }
+.account-order-details-inner { min-height: 0; overflow: hidden; }
+.account-order-progress { margin-top: 10px; }
+.tracking-step.completed { color: var(--text-2); }
+.tracking-step.completed .tracking-marker, .tracking-step.completed:not(:last-child)::after { border-color: var(--gold-line); background: var(--gold); }
+.account-order-info { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; margin-bottom: 16px; }
+.account-order-info .eyebrow { margin-bottom: 6px; }
+@media (prefers-reduced-motion: reduce) {
+  .account-order-details { transition: none; }
+}
 
 /* ---------- studio (customize page) ---------- */
 .studio-page { padding-top: calc(var(--header-h) + 24px); padding-bottom: 60px; }
