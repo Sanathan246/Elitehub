@@ -1087,7 +1087,7 @@ body[data-page="customize"] .site-header .header-inner { justify-content:space-b
 .studio-search input { font-size:12px; }
 .studio-filters { gap:6px; margin:10px 0 12px; padding-bottom:2px; }
 .studio-filter { height:30px; padding:0 11px; font-size:10px; }
-.studio-product-grid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); align-content:start; gap:12px; min-height:0; max-height:min(58vh,560px); overflow-x:hidden; overflow-y:auto; overscroll-behavior:contain; scrollbar-gutter:stable; padding:2px 4px 4px 2px; }
+.studio-product-grid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); align-content:start; gap:12px; min-height:0; max-height:min(56vh,calc(100dvh - 340px),560px); overflow-x:hidden; overflow-y:auto; scrollbar-gutter:stable; padding:2px 4px 4px 2px; }
 .studio-product-card { min-width:0; max-width:100%; overflow:hidden; border-radius:12px; }
 .studio-product-choice { padding:7px 7px 2px; }
 .studio-product-image { height:auto; aspect-ratio:1 / 1.02; border-radius:8px; }
