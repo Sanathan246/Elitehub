@@ -588,6 +588,7 @@ a.contact-card:hover { border-color: var(--gold-line); transform: translateX(4px
 .auth-page-session { margin-top: 20px; }
 .auth-page-session .btn { margin-top: 12px; }
 .orders { display: grid; gap: 16px; }
+.admin-page [hidden] { display: none !important; }
 .order { border: 1px solid var(--line); border-radius: 16px; background: var(--card); overflow: hidden; }
 .order-head { display: flex; flex-wrap: wrap; gap: 14px 30px; justify-content: space-between; align-items: center; padding: 16px 22px; border-bottom: 1px solid var(--line); background: rgba(255, 255, 255, 0.015); font-size: 12.5px; color: var(--muted); }
 .order-head b { display: block; color: var(--text); font-size: 13.5px; font-weight: 600; }

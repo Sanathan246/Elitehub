@@ -35,6 +35,7 @@ window.EH_CONFIG = {
     appId: "1:46946688789:web:5d93a71294514c6675d31c",
     measurementId: "G-05GPQ5ZGQC"
   },
+  adminEmail: "devildosti246@gmail.com",
 
   /* --- Email notifications (free) ---
      Get a free access key at https://web3forms.com (enter your email, copy the key).

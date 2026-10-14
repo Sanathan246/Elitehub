@@ -22,7 +22,14 @@
       <div>
         <nav class="crumbs" aria-label="Breadcrumb"><a href="index.html">Home</a><span class="sep">/</span><a href="#" data-open-cart>Bag</a><span class="sep">/</span><span>Checkout</span></nav>
         <h1 class="display" style="font-size:clamp(38px,4.4vw,56px);margin-bottom:26px">Checkout</h1>
-        <p class="preview-note">This is a preview of the EliteHub store. Orders placed here are not sent or charged.</p>
+        <p class="preview-note">Sign in before placing an order. Order details are saved securely to your account so you can view updates later.</p>
+        <div class="panel" id="checkoutAccountGate" hidden>
+          <h2>Sign in to place your order</h2>
+          <p class="muted">Orders must be linked to an account so they can be saved securely and updated from the order management page. Your bag will stay saved while you sign in.</p>
+          <a class="btn btn-gold" href="login.html">Sign in</a>
+          <a class="btn btn-outline" href="signup.html">Create account</a>
+        </div>
+        <p class="form-note err" id="checkoutAccountError" role="status" aria-live="polite"></p>
         <form id="checkoutForm" novalidate>
           <div class="panel">
             <h2><span class="step-n">1</span> Contact</h2>

@@ -7,6 +7,8 @@
     const C = EH.config;
     const $ = (s) => document.querySelector(s);
     const form = $('#checkoutForm');
+    const accountGate = $('#checkoutAccountGate');
+    const accountError = $('#checkoutAccountError');
     let coupon = '';
     try { coupon = sessionStorage.getItem('eh_coupon') || ''; } catch (e) { /* ignore */ }
     let firebaseApi = null;
@@ -130,49 +132,84 @@
     /* place order */
     form.addEventListener('submit', async (e) => {
       e.preventDefault();
+      const whatsappWindow = payment === 'whatsapp' ? window.open('about:blank', '_blank') : null;
+      try {
+        if (!firebaseApi || !firebaseApi.enabled) throw new Error('Order storage is unavailable. Please try again later.');
+        await firebaseApi.ready;
+      } catch (error) {
+        if (whatsappWindow) whatsappWindow.close();
+        accountGate.hidden = false;
+        accountError.textContent = error.message;
+        EH.toast(error.message, { type: 'error', duration: 4500 });
+        return;
+      }
+      const orderUser = firebaseApi.currentUser || firebaseUser;
+      if (!orderUser) {
+        if (whatsappWindow) whatsappWindow.close();
+        accountGate.hidden = false;
+        accountError.textContent = 'Sign in or create an account before placing an order.';
+        accountGate.scrollIntoView({ block: 'center', behavior: 'smooth' });
+        return;
+      }
+      accountGate.hidden = true;
+      accountError.textContent = '';
       const bad = Object.keys(rules).filter((n) => !check(n));
       if (bad.length) {
+        if (whatsappWindow) whatsappWindow.close();
         form.elements[bad[0]].focus();
         form.elements[bad[0]].scrollIntoView({ block: 'center', behavior: 'smooth' });
         EH.toast('Please check the highlighted fields', { type: 'error' });
         return;
       }
       const items = EH.cart.items();
-      if (!items.length) return;
+      if (!items.length) {
+        if (whatsappWindow) whatsappWindow.close();
+        return;
+      }
       const f = form.elements;
       const customer = { name: f.name.value.trim(), phone: f.phone.value.trim(), email: f.email.value.trim(), address1: f.address1.value.trim(), address2: f.address2.value.trim(), city: f.city.value.trim(), state: f.state.value, pincode: f.pincode.value.trim(), notes: f.notes.value.trim() };
       if ($('#f-save').checked) { const p = Object.assign({}, customer); delete p.notes; EH.store.set('eh_profile', p); }
-      const order = { id: EH.orderId(), date: new Date().toISOString(), customer, items, totals: EH.totals(items, coupon, payment), payment, status: 'Placed' };
+      const order = { id: EH.orderId(), date: new Date().toISOString(), customer, items, totals: EH.totals(items, coupon, payment), payment, status: payment === 'online' ? 'Payment pending' : 'Placed' };
 
       if (payment === 'online') {
         const btn = $('#placeOrder');
         btn.classList.add('is-loading');
         try {
+          await firebaseApi.saveOrder(orderUser.uid, order);
           order.paymentId = await payOnline(order);
           order.status = 'Paid';
+          try {
+            await firebaseApi.saveOrder(orderUser.uid, order);
+          } catch (error) {
+            console.warn('Paid order status could not be synced to Firebase.', error);
+            EH.toast('Payment succeeded, but the order update could not sync. Please contact us with your order number.', { type: 'error', duration: 6000 });
+          }
           finalize(order);
-        } catch (err) { EH.toast(err.message, { type: 'error', duration: 4500 }); }
+        } catch (err) {
+          if (err.message !== 'Payment was cancelled — your bag is still saved.') console.warn('Order could not be saved or paid.', err);
+          EH.toast(err.message, { type: 'error', duration: 4500 });
+        }
         btn.classList.remove('is-loading');
         return;
       }
-      if (payment === 'whatsapp') window.open(EH.waLink(EH.orderText(order)), '_blank', 'noopener');
+      try {
+        await firebaseApi.saveOrder(orderUser.uid, order);
+      } catch (error) {
+        if (whatsappWindow) whatsappWindow.close();
+        console.error('Order could not be saved to Firebase.', error);
+        EH.toast('Your order could not be saved. Please try again.', { type: 'error', duration: 4500 });
+        return;
+      }
+      if (payment === 'whatsapp') {
+        if (whatsappWindow) {
+          whatsappWindow.opener = null;
+          whatsappWindow.location.href = EH.waLink(EH.orderText(order));
+        } else {
+          EH.toast('Order saved. Allow pop-ups to open WhatsApp and send the order details.', { type: 'error', duration: 5000 });
+        }
+      }
       finalize(order);
     });
-
-    async function syncOrderToCloud(order) {
-      const api = firebaseApi || window.EHFirebase;
-      if (!api || !api.enabled) return false;
-      try {
-        await api.ready;
-        const user = api.currentUser || firebaseUser;
-        if (!user) return false;
-        await api.saveOrder(user.uid, order);
-        return true;
-      } catch (error) {
-        console.warn('Firebase order save failed.', error);
-        return false;
-      }
-    }
 
     function showTrackingDialog(order) {
       const dialog = document.createElement('div');
@@ -193,7 +230,7 @@
             <li class="tracking-step"><span class="tracking-marker" aria-hidden="true"></span><div><strong>Shipped</strong><p>Shipment details will appear when available.</p></div></li>
             <li class="tracking-step"><span class="tracking-marker" aria-hidden="true"></span><div><strong>Delivered</strong><p>Final delivery confirmation.</p></div></li>
           </ol>
-          <p class="tracking-disclaimer">Carrier tracking is not connected yet. For an update, use the contact option on your order confirmation.</p>
+          <p class="tracking-disclaimer">Shipping status and tracking details will appear under My Orders after the store updates your order. For help, use the contact option on your order confirmation.</p>
           <button class="btn btn-gold btn-block" type="button" data-close-tracking>Done</button>
         </section>`;
       const close = () => {
@@ -227,7 +264,6 @@
       renderSuccess(order);
       showTrackingDialog(order);
       window.scrollTo({ top: 0 });
-      syncOrderToCloud(order);
       const plain = EH.orderText(order).replace(/\*/g, '');
       EH.sendForm(`New order ${order.id} — ${EH.money(order.totals.total)}`, { name: order.customer.name, email: order.customer.email, phone: order.customer.phone, order_id: order.id, message: plain })
         .then((r) => { const n = document.getElementById('emailNote'); if (n && r.ok) n.innerHTML = `${EH.icon('checkCircle', 'ico-sm')} Order details sent to the ${EH.esc(C.brandName)} team.`; });

@@ -108,13 +108,25 @@
           <div>Total<b>${EH.money(o.totals.total)}</b></div>
           <span class="status ${statusClass}">${EH.esc(status)}</span>
         </div>
-        <div class="order-body">${EH.orderItemsHTML(o.items, true)}</div>
+        <div class="order-body">${EH.orderItemsHTML(o.items, true)}
+          ${o.carrier || o.trackingNumber || o.trackingUrl ? `<div class="order-tracking" style="margin-top:12px;font-size:13px;color:var(--muted)"><strong style="color:var(--text)">Shipping</strong>${o.carrier ? ` · ${EH.esc(o.carrier)}` : ''}${o.trackingNumber ? ` · Tracking: ${EH.esc(o.trackingNumber)}` : ''}${safeTrackingLink(o.trackingUrl)}</div>` : ''}
+        </div>
         <div class="order-actions">
           <button class="btn btn-outline btn-sm" type="button" data-reorder="${i}">${EH.icon('returns')} Order Again</button>
           ${C.whatsappNumber ? `<a class="btn btn-ghost btn-sm" href="${EH.waLink(`Hi ${C.brandName}! Could I get an update on my order #${orderId}?`)}" target="_blank" rel="noopener">${EH.icon('whatsapp')} Ask for an update</a>` : `<a class="btn btn-ghost btn-sm" href="${EH.mailLink('Order ' + orderId, `Hi ${C.brandName}! Could I get an update on my order #${orderId}?`)}">${EH.icon('mail')} Ask for an update</a>`}
         </div>
       </article>`;
       }).join('');
+    }
+
+    function safeTrackingLink(value) {
+      try {
+        const url = new URL(String(value || ''));
+        if (url.protocol !== 'https:') return '';
+        return ` · <a class="gold" href="${EH.esc(url.href)}" target="_blank" rel="noopener noreferrer">Track shipment</a>`;
+      } catch (error) {
+        return '';
+      }
     }
 
     box.addEventListener('click', (e) => {

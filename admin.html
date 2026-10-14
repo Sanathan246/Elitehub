@@ -1,0 +1,56 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Order Management — EliteHub</title>
+  <meta name="robots" content="noindex,nofollow">
+  <meta name="theme-color" content="#070609">
+  <link rel="icon" type="image/png" href="assets/favicon.png">
+  <link rel="apple-touch-icon" href="assets/apple-touch-icon.png">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@400;500;600;700&family=Montserrat:wght@300;400;500;600;700&display=swap">
+  <link rel="stylesheet" href="css/style.css">
+  <script>document.documentElement.classList.add('js');</script>
+</head>
+<body class="admin-page" data-page="admin" data-header="solid">
+  <div id="site-header"></div>
+  <main class="container section">
+    <nav class="crumbs" aria-label="Breadcrumb"><a href="index.html">Home</a><span class="sep">/</span><span>Order Management</span></nav>
+    <div style="display:flex;justify-content:space-between;align-items:center;gap:16px;flex-wrap:wrap">
+      <div>
+        <p class="eyebrow">Private administration</p>
+        <h1>Manage <span class="gold-text">Orders</span></h1>
+      </div>
+      <button class="btn btn-ghost btn-sm" id="adminSignOut" type="button" hidden>Sign out</button>
+    </div>
+    <p class="form-note" id="adminNote" role="status" aria-live="polite">Connecting to Firebase…</p>
+    <section class="panel" id="adminLogin" aria-labelledby="adminLoginTitle" hidden>
+      <h2 id="adminLoginTitle">Administrator sign in</h2>
+      <p class="muted">Sign in with the authorized administrator account to view and update customer orders.</p>
+      <form id="adminLoginForm">
+        <div class="form-grid" style="max-width:520px">
+          <div class="field full">
+            <label for="adminEmail">Administrator email</label>
+            <input class="input" id="adminEmail" name="email" type="email" autocomplete="username" required>
+          </div>
+          <div class="field full">
+            <label for="adminPassword">Password</label>
+            <input class="input" id="adminPassword" name="password" type="password" autocomplete="current-password" required>
+          </div>
+        </div>
+        <button class="btn btn-gold" id="adminLoginSubmit" type="submit" style="margin-top:18px">Sign in</button>
+      </form>
+    </section>
+    <section id="adminOrders" class="orders" aria-live="polite" hidden></section>
+  </main>
+  <div id="site-footer"></div>
+  <script src="js/config.js"></script>
+  <script src="js/mockups.js"></script>
+  <script src="js/products.js"></script>
+  <script src="js/app.js"></script>
+  <script type="module" src="js/firebase.js"></script>
+  <script src="js/admin.js"></script>
+</body>
+</html>

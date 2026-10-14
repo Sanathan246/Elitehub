@@ -17,7 +17,9 @@
     loadProfile() { return Promise.resolve(null); },
     clearProfile() { return Promise.resolve(); },
     saveOrder() { return Promise.reject(unavailableError()); },
-    listOrders() { return Promise.resolve([]); }
+    listOrders() { return Promise.resolve([]); },
+    listAllOrders() { return Promise.reject(unavailableError()); },
+    updateOrder() { return Promise.reject(unavailableError()); }
   });
 
   if (missing.length) {
@@ -58,7 +60,10 @@
         totals: order.totals && typeof order.totals === 'object' ? order.totals : {},
         payment: String(order.payment || ''),
         paymentId: order.paymentId ? String(order.paymentId) : '',
-        status: String(order.status || 'Placed')
+        status: String(order.status || 'Placed'),
+        carrier: String(order.carrier || ''),
+        trackingNumber: String(order.trackingNumber || ''),
+        trackingUrl: String(order.trackingUrl || '')
       };
     };
 
@@ -123,6 +128,26 @@
         return firestoreModule.getDocs(firestoreModule.collection(db, 'users', uid, 'orders')).then((snapshot) => snapshot.docs
           .map((entry) => Object.assign({ id: entry.id }, entry.data()))
           .sort((a, b) => new Date(b.date || 0).getTime() - new Date(a.date || 0).getTime()));
+      },
+      listAllOrders() {
+        return firestoreModule.getDocs(firestoreModule.collectionGroup(db, 'orders')).then((snapshot) => snapshot.docs
+          .map((entry) => {
+            const userRef = entry.ref.parent.parent;
+            return Object.assign({ id: entry.id, userId: userRef ? userRef.id : '' }, entry.data());
+          })
+          .filter((order) => order.userId)
+          .sort((a, b) => new Date(b.date || 0).getTime() - new Date(a.date || 0).getTime()));
+      },
+      updateOrder(uid, orderId, updates) {
+        if (!uid || !orderId) return Promise.reject(new Error('A customer and order ID are required.'));
+        const allowed = ['status', 'carrier', 'trackingNumber', 'trackingUrl'];
+        const data = {};
+        allowed.forEach((key) => {
+          if (Object.prototype.hasOwnProperty.call(updates || {}, key)) data[key] = String(updates[key] || '').trim();
+        });
+        if (!Object.keys(data).length) return Promise.reject(new Error('At least one order field must be updated.'));
+        data.updatedAt = firestoreModule.serverTimestamp();
+        return firestoreModule.updateDoc(firestoreModule.doc(db, 'users', uid, 'orders', orderId), data);
       }
     };
 
