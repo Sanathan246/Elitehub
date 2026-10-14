@@ -12,7 +12,7 @@ window.EH_CONFIG = {
   currency: "₹",
 
   /* --- Contact details (shown on the Contact page & footer) --- */
-  email: "hello@elitehub.in",            // TODO: your business email
+  email: "devildosti246@gmail.com",
   phone: "+91 00000 00000",              // TODO: your phone number (display format)
   address: "India",                      // TODO: city / studio address
   hours: "Mon – Sat, 10:00 AM – 7:00 PM",
