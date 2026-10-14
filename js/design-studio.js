@@ -69,7 +69,7 @@
     $('#selectedProductName').textContent = product.name;
     $('#selectedProductType').textContent = type.label;
     $('#viewerProductName').textContent = type.label;
-    $('#previewCaption').textContent = `${type.label} · 2D mockup`;
+    $('#previewCaption').textContent = `${type.label} · interactive 3D view`;
     $('#selectedProductPrice').textContent = EH.money(product.price);
     $('#selectedProductThumb').innerHTML = EH.productSVG(product, state.options.color, 'studio-selected-mockup');
     const optionRoot = $('#productOptions');
@@ -156,6 +156,22 @@
     });
     $('#addCartBtn').addEventListener('click', addToBag);
     $('#resetBtn').addEventListener('click', resetStudio);
+    const viewActions = $('#studioViewActions');
+    viewActions.addEventListener('click', (event) => {
+      const button = event.target.closest('[data-view-action]');
+      if (!button || !window.StudioProductViewer) return;
+      window.StudioProductViewer.action(button.dataset.viewAction);
+      sync3DAutoButton();
+    });
+    document.addEventListener('studio:product-autoplay', (event) => sync3DAutoButton(event.detail.autoRotate));
+  }
+
+  function sync3DAutoButton(value = window.StudioProductViewer?.autoRotate) {
+    const button = $('#studioAutoRotate');
+    if (!button) return;
+    const isAuto = !!value;
+    button.setAttribute('aria-pressed', String(isAuto));
+    button.classList.toggle('active', isAuto);
   }
 
   function setStatus(element, message, stateName = '') {
@@ -237,19 +253,68 @@
     return design ? EH.svgToDataURL(design) : '';
   }
 
+  function render3DPreview() {
+    const viewer = window.StudioProductViewer;
+    const mount = $('#product3dMount');
+    const preview = $('#staticPreview');
+    const actions = $('#studioViewActions');
+    const loading = $('#preview3dLoading');
+    if (!mount || !viewer) {
+      if (mount) mount.hidden = true;
+      if (preview) preview.hidden = false;
+      if (actions) actions.hidden = true;
+      if (loading) loading.hidden = true;
+      $('#previewCaption').textContent = `${EH.types[state.product.type].label} · 2D fallback`;
+      return false;
+    }
+
+    mount.hidden = false;
+    if (!viewer.init(mount)) {
+      mount.hidden = true;
+      if (preview) preview.hidden = false;
+      if (actions) actions.hidden = true;
+      if (loading) loading.hidden = true;
+      $('#previewCaption').textContent = `${EH.types[state.product.type].label} · 2D fallback`;
+      return false;
+    }
+    if (preview) preview.hidden = true;
+    if (actions) actions.hidden = false;
+    if (loading) loading.hidden = true;
+    const type = EH.types[state.product.type];
+    const artwork = state.artwork ? state.artwork.dataUrl : productDesignSource();
+    try {
+      viewer.update({ type: state.product.type, color: state.options.color, print: type.print, textureUrl: artwork });
+    } catch (error) {
+      mount.hidden = true;
+      if (preview) preview.hidden = false;
+      if (actions) actions.hidden = true;
+      $('#previewCaption').textContent = `${type.label} · 2D fallback`;
+      return false;
+    }
+    $('#previewCaption').textContent = `${type.label} · rotating 3D view`;
+    const autoButton = $('#studioAutoRotate');
+    if (autoButton) {
+      const isAuto = viewer.autoRotate;
+      autoButton.setAttribute('aria-pressed', String(isAuto));
+      autoButton.classList.toggle('active', isAuto);
+    }
+    return true;
+  }
+
   async function renderStaticPreview() {
     if (!state.product) return;
+    const has3D = render3DPreview();
     const token = ++state.renderToken;
     try {
       const imageUrl = await makeProductMockup(state.artwork ? state.artwork.dataUrl : productDesignSource());
       if (token === state.renderToken && imageUrl) {
         const preview = $('#staticPreview');
         preview.src = imageUrl;
-        preview.hidden = false;
-        preview.alt = `${state.product.name} ${EH.colors[state.options.color].name} 2D mockup`;
+        preview.hidden = has3D;
+        preview.alt = `${state.product.name} ${EH.colors[state.options.color].name} product mockup`;
       }
     } catch (error) {
-      if (token === state.renderToken) $('#previewCaption').textContent = 'Preview could not be prepared. Try another artwork file.';
+      if (token === state.renderToken && !has3D) $('#previewCaption').textContent = 'Preview could not be prepared. Try another artwork file.';
     }
   }
 
