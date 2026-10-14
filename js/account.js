@@ -36,6 +36,7 @@
     let authMode = 'login';
     let authBusy = false;
     let stopOrderUpdates = null;
+    let visibleOrders = [];
 
     const setNote = (el, message, type = '') => {
       if (!el) return;
@@ -70,24 +71,19 @@
     };
 
     const orderItemKey = (item = {}) => item.customId || [item.productId, item.color, item.size || '', item.model || ''].join('|');
-    const orderKeyFor = (order = {}) => String(order.id || `${order.date || ''}:${order.customer && order.customer.email || ''}`);
     const mergeOrders = (localOrders, remoteOrders) => {
-      const merged = new Map((localOrders || []).map((order) => [orderKeyFor(order), order]));
-      (remoteOrders || []).forEach((remote) => {
-        const key = orderKeyFor(remote);
-        const local = merged.get(key);
-        if (!local) {
-          merged.set(key, remote);
-          return;
-        }
+      const localById = new Map((localOrders || []).filter((order) => order.id).map((order) => [String(order.id), order]));
+      return (remoteOrders || []).map((remote) => {
+        const local = localById.get(String(remote.id || ''));
+        if (!local) return remote;
         const localItems = new Map((local.items || []).map((item) => [orderItemKey(item), item]));
         const items = (remote.items || []).map((item) => {
           const localItem = localItems.get(orderItemKey(item));
           return Object.assign({}, localItem || {}, item, { image: item.image || (localItem && localItem.image) });
         });
-        merged.set(key, Object.assign({}, local, remote, { items }));
-      });
-      return Array.from(merged.values()).sort((a, b) => new Date(b.date || 0).getTime() - new Date(a.date || 0).getTime());
+        return Object.assign({}, local, remote, { items });
+      })
+        .sort((a, b) => new Date(b.date || 0).getTime() - new Date(a.date || 0).getTime());
     };
 
     const dateLabel = (value) => {
@@ -96,6 +92,7 @@
     };
 
     function renderOrders(orders = readOrders()) {
+      visibleOrders = orders;
       if (!orders.length) {
         const message = authUser ? 'Your orders will appear here after you place one.' : 'When you place an order on this device, it will appear here.';
         box.innerHTML = `<div class="empty-state">${EH.icon('package')}<h3>No orders yet</h3><p>${message}</p><a class="btn btn-gold btn-sm" href="shop.html">Start Shopping ${EH.icon('arrow', 'ico-arrow')}</a></div>`;
@@ -149,7 +146,7 @@
       }
       const b = e.target.closest('[data-reorder]');
       if (!b) return;
-      const o = readOrders()[Number(b.dataset.reorder)];
+      const o = visibleOrders[Number(b.dataset.reorder)];
       if (!o) return;
       const existingCustom = new Set(EH.cart.items().filter((item) => item.custom && item.customId).map((item) => item.customId));
       let added = 0;
@@ -176,7 +173,7 @@
     });
 
     async function cancelOrder(index, button) {
-      const order = readOrders()[index];
+      const order = visibleOrders[index];
       if (!authUser || !firebaseApi || !firebaseApi.enabled) {
         EH.toast('Sign in to cancel an order.', { type: 'error' });
         return;
@@ -437,6 +434,7 @@
       if (signedIn) setNote(profileNote, 'Your signed-in profile is ready to use.', 'ok');
       if (profileWelcome) profileWelcome.textContent = signedIn && authUser.displayName ? `Welcome, ${authUser.displayName}` : 'Welcome back';
       if (profileAccountEmail) profileAccountEmail.textContent = signedIn ? (authUser.email || '') : '';
+      if (signedIn) box.innerHTML = `<div class="panel">Loading your orders…</div>`;
       if (!signedIn && stopOrderUpdates) {
         stopOrderUpdates();
         stopOrderUpdates = null;
@@ -549,7 +547,7 @@
     document.addEventListener('firebase:ready', (e) => setupFirebase(e.detail && e.detail.api ? e.detail.api : window.EHFirebase));
     if (window.EHFirebase) setupFirebase(window.EHFirebase);
 
-    window.addEventListener('storage', (e) => { if (e.key === orderKey) renderOrders(); });
+    window.addEventListener('storage', (e) => { if (e.key === orderKey && !authUser) renderOrders(); });
 
     renderOrders();
   });

@@ -17,6 +17,7 @@
     let api = null;
     let signedInUser = null;
     let orders = [];
+    let stopOrderUpdates = null;
 
     emailInput.value = adminEmail;
 
@@ -34,6 +35,10 @@
       apiLogin.hidden = false;
       orderBox.hidden = true;
       signOutButton.hidden = !signedInUser;
+      if (stopOrderUpdates) {
+        stopOrderUpdates();
+        stopOrderUpdates = null;
+      }
       setNote(message, signedInUser ? 'err' : '');
     }
 
@@ -93,9 +98,16 @@
       signOutButton.hidden = false;
       orderBox.innerHTML = '<div class="panel">Loading customer orders…</div>';
       try {
-        orders = await api.listAllOrders();
-        renderOrders();
-        setNote(`${orders.length} order${orders.length === 1 ? '' : 's'} loaded.`, 'ok');
+        if (stopOrderUpdates) stopOrderUpdates();
+        stopOrderUpdates = api.subscribeAllOrders((currentOrders) => {
+          orders = currentOrders;
+          renderOrders();
+          setNote(`${orders.length} order${orders.length === 1 ? '' : 's'} loaded.`, 'ok');
+        }, (error) => {
+          console.error('Admin order subscription failed.', error);
+          orderBox.hidden = true;
+          showLogin('Could not receive order updates. Check that Firebase rules are deployed and this account has verified administrator access.');
+        });
       } catch (error) {
         console.error('Admin order list failed.', error);
         orderBox.hidden = true;

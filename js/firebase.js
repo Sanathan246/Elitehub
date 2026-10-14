@@ -21,6 +21,7 @@
     subscribeOrders() { return () => {}; },
     cancelOrder() { return Promise.reject(unavailableError()); },
     listAllOrders() { return Promise.reject(unavailableError()); },
+    subscribeAllOrders() { return () => {}; },
     updateOrder() { return Promise.reject(unavailableError()); }
   });
 
@@ -154,13 +155,28 @@
         });
       },
       listAllOrders() {
-        return firestoreModule.getDocs(firestoreModule.collectionGroup(db, 'orders')).then((snapshot) => snapshot.docs
-          .map((entry) => {
+        return firestoreModule.getDocs(firestoreModule.collectionGroup(db, 'orders')).then((snapshot) =>
+          snapshot.docs.map((entry) => {
             const userRef = entry.ref.parent.parent;
             return Object.assign({ id: entry.id, userId: userRef ? userRef.id : '' }, entry.data());
           })
           .filter((order) => order.userId)
           .sort((a, b) => new Date(b.date || 0).getTime() - new Date(a.date || 0).getTime()));
+      },
+      subscribeAllOrders(onOrders, onError) {
+        if (typeof onOrders !== 'function') throw new Error('An order update callback is required.');
+        return firestoreModule.onSnapshot(
+          firestoreModule.collectionGroup(db, 'orders'),
+          (snapshot) => {
+            const orders = snapshot.docs.map((entry) => {
+              const userRef = entry.ref.parent.parent;
+              return Object.assign({ id: entry.id, userId: userRef ? userRef.id : '' }, entry.data());
+            }).filter((order) => order.userId)
+              .sort((a, b) => new Date(b.date || 0).getTime() - new Date(a.date || 0).getTime());
+            onOrders(orders);
+          },
+          typeof onError === 'function' ? onError : (error) => console.error('Firebase admin order subscription failed.', error)
+        );
       },
       updateOrder(uid, orderId, updates) {
         if (!uid || !orderId) return Promise.reject(new Error('A customer and order ID are required.'));
