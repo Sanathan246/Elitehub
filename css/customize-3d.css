@@ -1,0 +1,166 @@
+.studio-3d-canvas { background:#080809; }
+.studio-3d-canvas .studio-canvas-toolbar { background:#09090a; }
+.studio-3d-stage {
+  position:relative;
+  display:block;
+  flex:1 1 auto;
+  min-height:0;
+  overflow:hidden;
+  isolation:isolate;
+  background:
+    radial-gradient(ellipse 42% 58% at 50% 43%,rgba(72,70,70,.2),transparent 100%),
+    radial-gradient(ellipse 62% 35% at 50% 110%,rgba(31,29,29,.35),transparent 100%),
+    linear-gradient(180deg,#080809 0%,#101011 51%,#080809 100%);
+}
+.studio-3d-stage::before,
+.studio-3d-stage::after { position:absolute; content:""; inset:0; pointer-events:none; }
+.studio-3d-stage::before {
+  z-index:0;
+  background:radial-gradient(ellipse 34% 49% at 50% 43%,rgba(188,183,177,.08),transparent 100%);
+  filter:blur(22px);
+}
+.studio-3d-stage::after {
+  z-index:2;
+  background:linear-gradient(90deg,rgba(0,0,0,.23),transparent 22%,transparent 78%,rgba(0,0,0,.23));
+}
+.studio-3d-halo {
+  position:absolute;
+  z-index:0;
+  top:48%;
+  left:50%;
+  width:min(68%,650px);
+  aspect-ratio:1.45;
+  transform:translate(-50%,-50%);
+  border-radius:50%;
+  background:radial-gradient(ellipse,rgba(185,179,173,.11) 0%,rgba(65,63,63,.055) 38%,transparent 72%);
+  filter:blur(27px);
+  pointer-events:none;
+}
+.product-preview-3d-mount {
+  position:absolute;
+  z-index:1;
+  inset:0;
+  width:100%;
+  height:100%;
+  touch-action:none;
+}
+.product-preview-3d-mount[hidden],
+.studio-3d-controls[hidden],
+.studio-3d-loading[hidden],
+.studio-static-preview[hidden] { display:none !important; }
+.product-preview-3d-mount canvas {
+  display:block;
+  width:100%;
+  height:100%;
+  outline:none;
+  touch-action:none;
+}
+.studio-static-preview {
+  position:absolute;
+  z-index:1;
+  inset:7% 12%;
+  width:76%;
+  height:86%;
+  object-fit:contain;
+  filter:drop-shadow(0 25px 35px rgba(0,0,0,.48));
+}
+.studio-3d-loading {
+  position:absolute;
+  z-index:3;
+  top:50%;
+  left:50%;
+  transform:translate(-50%,-50%);
+  color:rgba(239,234,226,.72);
+  font-size:10px;
+  letter-spacing:.14em;
+  text-transform:uppercase;
+}
+.studio-3d-caption {
+  position:absolute;
+  z-index:3;
+  top:21px;
+  left:24px;
+  display:flex;
+  align-items:center;
+  gap:9px;
+  max-width:calc(100% - 48px);
+  padding:9px 12px;
+  border:1px solid rgba(255,255,255,.08);
+  border-radius:999px;
+  background:rgba(8,8,9,.56);
+  color:#ded7ce;
+  font-size:8px;
+  letter-spacing:.11em;
+  backdrop-filter:blur(12px);
+  pointer-events:none;
+}
+.studio-3d-caption .studio-canvas-dot { width:6px; height:6px; flex:none; }
+.studio-3d-instructions {
+  position:absolute;
+  z-index:3;
+  bottom:22px;
+  left:24px;
+  margin:0;
+  color:rgba(228,222,214,.58);
+  font-size:8px;
+  letter-spacing:.045em;
+  pointer-events:none;
+}
+.studio-3d-instructions b { padding:0 4px; color:rgba(229,219,205,.35); font-weight:400; }
+.studio-3d-controls {
+  position:absolute;
+  z-index:4;
+  right:22px;
+  bottom:17px;
+  display:flex;
+  align-items:center;
+  gap:4px;
+  padding:5px;
+  border:1px solid rgba(255,255,255,.1);
+  border-radius:10px;
+  background:rgba(8,8,9,.62);
+  box-shadow:0 8px 26px rgba(0,0,0,.24);
+  backdrop-filter:blur(12px);
+}
+.studio-3d-controls button {
+  display:grid;
+  place-items:center;
+  min-width:31px;
+  height:30px;
+  padding:0 8px;
+  border-radius:6px;
+  color:#d7d2cb;
+  font:400 16px/1 var(--font-body);
+  transition:background .18s,color .18s;
+}
+.studio-3d-controls button:hover,
+.studio-3d-controls button:focus-visible { background:rgba(255,255,255,.1); color:#fff; outline:none; }
+.studio-3d-controls button:focus-visible { box-shadow:0 0 0 2px rgba(222,190,145,.66); }
+.studio-3d-controls .studio-auto-button {
+  min-width:51px;
+  color:#b6ada1;
+  font-size:8px;
+  letter-spacing:.06em;
+  text-transform:uppercase;
+}
+.studio-3d-controls .studio-auto-button.active { background:rgba(221,190,145,.12); color:#e4c99f; }
+.studio-3d-control-divider { width:1px; height:17px; margin:0 3px; background:rgba(255,255,255,.14); }
+@media (max-width:900px) {
+  .studio-3d-caption { top:16px; left:16px; }
+  .studio-3d-instructions { bottom:17px; left:16px; }
+  .studio-3d-controls { right:14px; bottom:12px; }
+}
+@media (max-width:680px) {
+  .studio-3d-stage::after { background:linear-gradient(90deg,rgba(0,0,0,.12),transparent 16%,transparent 84%,rgba(0,0,0,.12)); }
+  .studio-3d-caption { top:13px; left:13px; padding:7px 9px; font-size:7px; }
+  .studio-3d-instructions { bottom:16px; left:14px; font-size:7px; }
+  .studio-3d-controls { right:12px; bottom:9px; gap:2px; padding:4px; }
+  .studio-3d-controls button { min-width:28px; height:28px; }
+  .studio-3d-controls .studio-auto-button { min-width:44px; font-size:7px; }
+}
+@media (max-width:390px) {
+  .studio-3d-instructions { max-width:130px; line-height:1.45; }
+}
+@media (prefers-reduced-motion:reduce) {
+  .studio-3d-controls button { transition:none; }
+}
