@@ -69,7 +69,7 @@
     $('#selectedProductName').textContent = product.name;
     $('#selectedProductType').textContent = type.label;
     $('#viewerProductName').textContent = type.label;
-    $('#previewCaption').textContent = `${type.label} · interactive 3D view`;
+    $('#previewCaption').textContent = `${type.label} · front-view mockup`;
     $('#selectedProductPrice').textContent = EH.money(product.price);
     $('#selectedProductThumb').innerHTML = EH.productSVG(product, state.options.color, 'studio-selected-mockup');
     const optionRoot = $('#productOptions');
@@ -156,22 +156,6 @@
     });
     $('#addCartBtn').addEventListener('click', addToBag);
     $('#resetBtn').addEventListener('click', resetStudio);
-    const viewActions = $('#studioViewActions');
-    viewActions.addEventListener('click', (event) => {
-      const button = event.target.closest('[data-view-action]');
-      if (!button || !window.StudioProductViewer) return;
-      window.StudioProductViewer.action(button.dataset.viewAction);
-      sync3DAutoButton();
-    });
-    document.addEventListener('studio:product-autoplay', (event) => sync3DAutoButton(event.detail.autoRotate));
-  }
-
-  function sync3DAutoButton(value = window.StudioProductViewer?.autoRotate) {
-    const button = $('#studioAutoRotate');
-    if (!button) return;
-    const isAuto = !!value;
-    button.setAttribute('aria-pressed', String(isAuto));
-    button.classList.toggle('active', isAuto);
   }
 
   function setStatus(element, message, stateName = '') {
@@ -253,84 +237,48 @@
     return design ? EH.svgToDataURL(design) : '';
   }
 
-  function render3DPreview() {
-    const viewer = window.StudioProductViewer;
-    const mount = $('#product3dMount');
-    const preview = $('#staticPreview');
-    const actions = $('#studioViewActions');
-    const loading = $('#preview3dLoading');
-    if (!mount || !viewer) {
-      if (mount) mount.hidden = true;
-      if (preview) preview.hidden = false;
-      if (actions) actions.hidden = true;
-      if (loading) loading.hidden = true;
-      $('#previewCaption').textContent = `${EH.types[state.product.type].label} · 2D fallback`;
-      return false;
-    }
-
-    mount.hidden = false;
-    if (!viewer.init(mount)) {
-      mount.hidden = true;
-      if (preview) preview.hidden = false;
-      if (actions) actions.hidden = true;
-      if (loading) loading.hidden = true;
-      $('#previewCaption').textContent = `${EH.types[state.product.type].label} · 2D fallback`;
-      return false;
-    }
-    if (preview) preview.hidden = true;
-    if (actions) actions.hidden = false;
-    if (loading) loading.hidden = true;
-    const type = EH.types[state.product.type];
-    const artwork = state.artwork ? state.artwork.dataUrl : productDesignSource();
-    try {
-      viewer.update({ type: state.product.type, color: state.options.color, print: type.print, textureUrl: artwork });
-    } catch (error) {
-      mount.hidden = true;
-      if (preview) preview.hidden = false;
-      if (actions) actions.hidden = true;
-      $('#previewCaption').textContent = `${type.label} · 2D fallback`;
-      return false;
-    }
-    $('#previewCaption').textContent = `${type.label} · rotating 3D view`;
-    const autoButton = $('#studioAutoRotate');
-    if (autoButton) {
-      const isAuto = viewer.autoRotate;
-      autoButton.setAttribute('aria-pressed', String(isAuto));
-      autoButton.classList.toggle('active', isAuto);
-    }
-    return true;
-  }
-
   async function renderStaticPreview() {
     if (!state.product) return;
-    const has3D = render3DPreview();
     const token = ++state.renderToken;
     try {
       const imageUrl = await makeProductMockup(state.artwork ? state.artwork.dataUrl : productDesignSource());
       if (token === state.renderToken && imageUrl) {
         const preview = $('#staticPreview');
         preview.src = imageUrl;
-        preview.hidden = has3D;
-        preview.alt = `${state.product.name} ${EH.colors[state.options.color].name} product mockup`;
+        preview.hidden = false;
+        preview.alt = `${state.product.name} ${EH.colors[state.options.color].name} 2D mockup`;
       }
     } catch (error) {
-      if (token === state.renderToken && !has3D) $('#previewCaption').textContent = 'Preview could not be prepared. Try another artwork file.';
+      if (token === state.renderToken) $('#previewCaption').textContent = 'Preview could not be prepared. Try another artwork file.';
     }
   }
 
   async function makeProductMockup(source) {
     const product = state.product, type = EH.types[product.type];
     const [base, overlay, artwork] = await Promise.all([
-      loadImage(EH.svgToDataURL(EH.mockup(product.type, { color: state.options.color, layer: 'base', px: 1000 }))),
-      loadImage(EH.svgToDataURL(EH.mockup(product.type, { color: state.options.color, layer: 'overlay', px: 1000 }))),
+      loadImage(EH.svgToDataURL(EH.mockup(product.type, { color: state.options.color, layer: 'base', px: 1200 }))),
+      loadImage(EH.svgToDataURL(EH.mockup(product.type, { color: state.options.color, layer: 'overlay', px: 1200 }))),
       source ? loadImage(source) : Promise.resolve(null)
     ]);
     const canvas = document.createElement('canvas');
-    canvas.width = canvas.height = 500;
+    const outputSize = 1200;
+    canvas.width = canvas.height = outputSize;
     const context = canvas.getContext('2d');
-    context.drawImage(base, 0, 0, 500, 500);
+    if (!context) throw new Error('A 2D drawing surface is unavailable.');
+    context.imageSmoothingEnabled = true;
+    context.imageSmoothingQuality = 'high';
+
+    // Keep every product comfortably framed while preserving its real front-view proportions.
+    const previewZoom = { tshirt: 1.03, hoodie: 1.02, mug: 1.32, phonecase: 1.05, cushion: 1.30, tote: 1.08, frame: 1.10 };
+    const zoom = previewZoom[product.type] || 1;
+    const ratio = outputSize / 400;
+    context.save();
+    context.translate(outputSize / 2, outputSize / 2);
+    context.scale(zoom, zoom);
+    context.translate(-outputSize / 2, -outputSize / 2);
+    context.drawImage(base, 0, 0, outputSize, outputSize);
     if (artwork) {
-      const p = type.print, ratio = 500 / 400;
+      const p = type.print;
       const maxW = p.w * .83, maxH = p.h * .83;
       const scale = Math.min(maxW / artwork.naturalWidth, maxH / artwork.naturalHeight);
       const w = artwork.naturalWidth * scale, h = artwork.naturalHeight * scale;
@@ -339,7 +287,8 @@
       context.drawImage(artwork, (p.x + (p.w - w) / 2) * ratio, (p.y + (p.h - h) / 2) * ratio, w * ratio, h * ratio);
       context.restore();
     }
-    context.drawImage(overlay, 0, 0, 500, 500);
+    context.drawImage(overlay, 0, 0, outputSize, outputSize);
+    context.restore();
     return canvas.toDataURL('image/png');
   }
 
