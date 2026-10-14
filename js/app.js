@@ -726,19 +726,40 @@
         e.preventDefault();
         const inp = EH.$('input[type=email]', form);
         const note = form.parentElement.querySelector('.form-note');
-        const email = inp.value.trim();
-        const say = (msg, cls) => { if (note) { note.textContent = msg; note.className = 'form-note ' + cls; } };
+        const email = inp.value.trim().toLowerCase();
+        const say = (msg, cls = '') => { if (note) { note.textContent = msg; note.className = 'form-note ' + cls; } };
         if (!EH.validEmail(email)) { say('Please enter a valid email address.', 'err'); inp.focus(); return; }
-        const list = EH.store.get('eh_newsletter', []);
+
+        if (!C.web3formsKey) {
+          if (!C.email) { say('Newsletter sign-up is not available right now. Please try again later.', 'err'); return; }
+          say(`Your email app is opening. Send the message to join. If it does not open, email ${C.email}.`);
+          location.href = EH.mailLink('Newsletter signup', `Please add ${email} to the ${C.brandName || 'EliteHub'} newsletter.`);
+          return;
+        }
+
+        const stored = EH.store.get('eh_newsletter_sent', []);
+        const list = Array.isArray(stored) ? stored : [];
         if (list.includes(email)) { say("You're already on the list — thank you!", 'ok'); return; }
         const btn = EH.$('button', form);
         btn.classList.add('is-loading');
-        await EH.sendForm('New newsletter subscriber', { email, message: `${email} subscribed to the ${C.brandName} newsletter.` });
-        btn.classList.remove('is-loading');
-        list.push(email);
-        EH.store.set('eh_newsletter', list);
-        inp.value = '';
-        say("You're in! Watch your inbox for exclusive drops & offers.", 'ok');
+        try {
+          const result = await EH.sendForm('New newsletter subscriber', {
+            email,
+            message: `${email} subscribed to the ${C.brandName || 'store'} newsletter.`
+          });
+          if (!result.ok) {
+            say('We could not sign you up right now. Please try again later or use the contact page.', 'err');
+            return;
+          }
+          list.push(email);
+          EH.store.set('eh_newsletter_sent', list);
+          inp.value = '';
+          say("You're subscribed. Watch your inbox for exclusive drops and offers.", 'ok');
+        } catch (error) {
+          say('We could not sign you up right now. Please try again later or use the contact page.', 'err');
+        } finally {
+          btn.classList.remove('is-loading');
+        }
       });
     });
   }
@@ -798,13 +819,4 @@
     EH.cart.refresh();
     EH.reveal();
   });
-})();
-
-/* ---- shared-preview build: show files for saving (downloads are blocked here) ---- */
-(function () {
-  const EH = window.EH;
-  EH.download = (data, filename) => {
-    const url = typeof data === 'string' ? data : URL.createObjectURL(data);
-    EH.modal.open(`<h3>Save Your File</h3><p class="muted" style="font-size:13px;margin:6px 0 16px">Right-click (or press and hold) the image and choose &ldquo;Save image&rdquo;.</p><img class="preview-img" src="${url}" alt="${EH.esc(filename)}">`, { noFocus: true });
-  };
 })();

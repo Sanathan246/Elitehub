@@ -68,9 +68,9 @@ window.EH_CONFIG = {
 
   /* --- Social links (leave "" to hide an icon) --- */
   social: {
-    instagram: "https://instagram.com/",
-    youtube: "https://youtube.com/",
-    pinterest: "https://pinterest.com/",
-    x: "https://x.com/"
+    instagram: "",
+    youtube: "",
+    pinterest: "",
+    x: ""
   }
 };
