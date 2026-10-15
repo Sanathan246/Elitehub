@@ -41,6 +41,10 @@ service cloud.firestore {
   match /databases/{database}/documents {
     match /users/{userId} {
       allow read, write: if isOwner(userId);
+
+      match /customizations/{customizationId} {
+        allow read, write: if isOwner(userId) || isAdmin();
+      }
     }
 
     match /users/{userId}/orders/{orderId} {

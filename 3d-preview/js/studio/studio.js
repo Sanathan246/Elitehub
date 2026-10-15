@@ -14,6 +14,7 @@ import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
 import { DecalGeometry } from 'three/addons/geometries/DecalGeometry.js';
+import { GLTFExporter } from 'three/addons/exporters/GLTFExporter.js';
 import { buildTemplate, loadModelFile, defaultAppearance, defaultParams } from './models.js';
 import { backdropTexture, renderTextCanvas, contactShadowTexture } from './textures.js';
 
@@ -322,10 +323,13 @@ export class Studio extends EventTarget {
       type: def.type,                 // 'image' | 'text'
       name: def.name || (def.type === 'text' ? def.text : 'Artwork'),
       src: def.src || null,
+      originalSrc: def.originalSrc || null,
       text: def.text ?? '',
       font: def.font || 'montserrat',
       color: def.color || '#17151b',
       size: def.size ?? null,
+      scaleX: def.scaleX ?? 1,
+      scaleY: def.scaleY ?? 1,
       rotation: def.rotation ?? 0,
       opacity: def.opacity ?? 1,
       visible: def.visible ?? true,
@@ -347,11 +351,11 @@ export class Studio extends EventTarget {
   async updateLayer(id, patch) {
     const l = this.layers.find((x) => x.id === id);
     if (!l) return;
-    const retexture = ['text', 'font', 'color'].some((k) => k in patch && patch[k] !== l[k]);
+    const retexture = ['text', 'font', 'color', 'src'].some((k) => k in patch && patch[k] !== l[k]);
     Object.assign(l, patch);
     if (retexture) await this._prepareTexture(l);
     if ('opacity' in patch && l._mat) l._mat.opacity = l.opacity;
-    if (retexture || ['size', 'rotation', 'anchor', 'visible'].some((k) => k in patch)) this._buildDecal(l);
+    if (retexture || ['size', 'scaleX', 'scaleY', 'rotation', 'anchor', 'visible'].some((k) => k in patch)) this._buildDecal(l);
     this._emitLayers();
   }
 
@@ -518,8 +522,8 @@ export class Studio extends EventTarget {
     h.lookAt(hit.point.clone().add(on));
     h.rotateZ(THREE.MathUtils.degToRad(-l.rotation));
     h.updateMatrixWorld(true);
-    const w = l.size;
-    const ht = l.size / (l._aspect || 1);
+    const w = l.size * l.scaleX;
+    const ht = (l.size / (l._aspect || 1)) * l.scaleY;
     // deep enough to wrap curved surfaces; keepFacing() stops it reaching the far side
     const depth = THREE.MathUtils.clamp(Math.max(w, ht) * 1.1, 0.06, 0.6);
     let geo = new DecalGeometry(hit.object, hit.point, h.rotation.clone(), new THREE.Vector3(w, ht, depth));
@@ -552,9 +556,10 @@ export class Studio extends EventTarget {
 
   _makeSelectionFrame() {
     const geo = new THREE.BufferGeometry();
-    geo.setAttribute('position', new THREE.Float32BufferAttribute(new Array(16 * 3).fill(0), 3));
+    geo.setAttribute('position', new THREE.Float32BufferAttribute(new Array(32 * 3).fill(0), 3));
     const mat = new THREE.LineBasicMaterial({ color: '#e6bf86', depthTest: false, transparent: true, opacity: 0.95 });
     const lines = new THREE.LineSegments(geo, mat);
+    lines.name = '__ehSelectionFrame';
     lines.renderOrder = 999;
     lines.visible = false;
     lines.raycast = () => {};
@@ -572,6 +577,11 @@ export class Studio extends EventTarget {
     const pts = [];
     const corner = (x, y, dx, dy) => { pts.push(x, y, z, x + dx, y, z, x, y, z, x, y + dy, z); };
     corner(-hw, -hh, c, c); corner(hw, -hh, -c, c); corner(hw, hh, -c, -c); corner(-hw, hh, c, -c);
+    const handleSize = Math.min(hw, hh, 0.025);
+    const handle = (x, y) => {
+      pts.push(x - handleSize, y, z, x + handleSize, y, z, x, y - handleSize, z, x, y + handleSize, z);
+    };
+    handle(0, -hh); handle(hw, 0); handle(0, hh); handle(-hw, 0);
     sel.geometry.attributes.position.array.set(pts);
     sel.geometry.attributes.position.needsUpdate = true;
     sel.geometry.computeBoundingSphere();
@@ -579,6 +589,62 @@ export class Studio extends EventTarget {
     sel.matrix.copy(matrix);
     object.add(sel);
     sel.visible = true;
+  }
+
+  _selectionScreenGeometry(layer) {
+    if (!layer?._frame) return null;
+    const { object, matrix, w, h } = layer._frame;
+    object.updateMatrixWorld(true);
+    this.camera.updateMatrixWorld(true);
+    const rect = this.renderer.domElement.getBoundingClientRect();
+    const project = (x, y) => {
+      const p = new THREE.Vector3(x, y, 0.006)
+        .applyMatrix4(matrix)
+        .applyMatrix4(object.matrixWorld)
+        .project(this.camera);
+      return { x: rect.left + (p.x + 1) * rect.width / 2, y: rect.top + (1 - p.y) * rect.height / 2 };
+    };
+    const corners = [project(-w / 2, -h / 2), project(w / 2, -h / 2), project(w / 2, h / 2), project(-w / 2, h / 2)];
+    const handles = [
+      { ...corners[0], index: 0, axes: 'xy' },
+      { ...corners[1], index: 1, axes: 'xy' },
+      { ...corners[2], index: 2, axes: 'xy' },
+      { ...corners[3], index: 3, axes: 'xy' },
+      { x: (corners[0].x + corners[1].x) / 2, y: (corners[0].y + corners[1].y) / 2, index: 4, axes: 'y' },
+      { x: (corners[1].x + corners[2].x) / 2, y: (corners[1].y + corners[2].y) / 2, index: 5, axes: 'x' },
+      { x: (corners[2].x + corners[3].x) / 2, y: (corners[2].y + corners[3].y) / 2, index: 6, axes: 'y' },
+      { x: (corners[3].x + corners[0].x) / 2, y: (corners[3].y + corners[0].y) / 2, index: 7, axes: 'x' },
+    ];
+    const topWidth = new THREE.Vector2(corners[1].x - corners[0].x, corners[1].y - corners[0].y);
+    const bottomWidth = new THREE.Vector2(corners[2].x - corners[3].x, corners[2].y - corners[3].y);
+    const leftHeight = new THREE.Vector2(corners[3].x - corners[0].x, corners[3].y - corners[0].y);
+    const rightHeight = new THREE.Vector2(corners[2].x - corners[1].x, corners[2].y - corners[1].y);
+    return {
+      center: project(0, 0),
+      corners,
+      handles,
+      width: (topWidth.length() + bottomWidth.length()) / 2,
+      height: (leftHeight.length() + rightHeight.length()) / 2,
+      widthAxis: topWidth.add(bottomWidth).normalize(),
+      heightAxis: leftHeight.add(rightHeight).normalize(),
+    };
+  }
+
+  _resizeHandleAt(layer, e) {
+    const geometry = this._selectionScreenGeometry(layer);
+    if (!geometry) return null;
+    let nearest = null;
+    geometry.handles.forEach((handle) => {
+      const distance = Math.hypot(e.clientX - handle.x, e.clientY - handle.y);
+      if (!nearest || distance < nearest.distance) nearest = { ...handle, distance, center: geometry.center };
+    });
+    return nearest && nearest.distance <= 22 ? nearest : null;
+  }
+
+  _resizeCursor(handle) {
+    if (handle.axes === 'x') return 'ew-resize';
+    if (handle.axes === 'y') return 'ns-resize';
+    return handle.index % 2 ? 'nesw-resize' : 'nwse-resize';
   }
 
   setEditing(on) {
@@ -607,11 +673,35 @@ export class Studio extends EventTarget {
       if (e.button !== 0) return;
       down = { x: e.clientX, y: e.clientY, t: performance.now() };
       if (!this.editing || this._recording) return;
-      const hit = pick(e);
-      const layer = hit && this._layerAtPoint(hit.point);
-      if (layer) {
+      const selected = this.layers.find((item) => item.id === this.selectedId);
+      const handle = selected && this._resizeHandleAt(selected, e);
+      if (selected && handle) {
+        const geometry = this._selectionScreenGeometry(selected);
+        const layer = selected;
+        drag = {
+          layer,
+          mode: 'resize',
+          startScaleX: layer.scaleX,
+          startScaleY: layer.scaleY,
+          startX: e.clientX,
+          startY: e.clientY,
+          width: geometry.width,
+          height: geometry.height,
+          widthAxis: geometry.widthAxis,
+          heightAxis: geometry.heightAxis,
+          axes: handle.axes,
+          signX: handle.index === 0 || handle.index === 3 || handle.index === 7 ? -1 : 1,
+          signY: handle.index < 2 || handle.index === 4 ? -1 : 1,
+        };
+        this.controls.enabled = false;
+        el.setPointerCapture(e.pointerId);
+        el.style.cursor = this._resizeCursor(handle);
+      } else {
+        const hit = pick(e);
+        const layer = hit && this._layerAtPoint(hit.point);
+        if (!layer) return;
         if (this.selectedId !== layer.id) this.select(layer.id);
-        drag = { layer };
+        drag = { layer, mode: 'move' };
         this.controls.enabled = false;
         el.setPointerCapture(e.pointerId);
         el.style.cursor = 'grabbing';
@@ -620,6 +710,16 @@ export class Studio extends EventTarget {
     el.addEventListener('pointermove', (e) => {
       if (drag) {
         pending = e;
+        if (drag.mode === 'resize') {
+          const dx = e.clientX - drag.startX;
+          const dy = e.clientY - drag.startY;
+          const widthDelta = (dx * drag.widthAxis.x + dy * drag.widthAxis.y) * drag.signX;
+          const heightDelta = (dx * drag.heightAxis.x + dy * drag.heightAxis.y) * drag.signY;
+          if (drag.axes.includes('x')) drag.layer.scaleX = THREE.MathUtils.clamp(drag.startScaleX * (1 + (2 * widthDelta / drag.width)), 0.1, 20);
+          if (drag.axes.includes('y')) drag.layer.scaleY = THREE.MathUtils.clamp(drag.startScaleY * (1 + (2 * heightDelta / drag.height)), 0.1, 20);
+          this._buildDecal(drag.layer);
+          return;
+        }
         if (!drag.raf) {
           drag.raf = requestAnimationFrame(() => {
             if (!drag) return;
@@ -636,11 +736,14 @@ export class Studio extends EventTarget {
       }
       if (this.editing && !down && e.pointerType === 'mouse') {
         const hit = pick(e);
-        el.style.cursor = hit && this._layerAtPoint(hit.point) ? 'grab' : '';
+        const layer = hit && this._layerAtPoint(hit.point);
+        const handle = layer && this._resizeHandleAt(layer, e);
+        el.style.cursor = handle ? this._resizeCursor(handle) : layer ? 'grab' : '';
       }
     });
     const end = (e) => {
       if (drag) {
+        if (drag.raf) cancelAnimationFrame(drag.raf);
         drag = null;
         this.controls.enabled = true;
         el.style.cursor = '';
@@ -654,6 +757,31 @@ export class Studio extends EventTarget {
     };
     el.addEventListener('pointerup', end);
     el.addEventListener('pointercancel', end);
+  }
+
+  /** Exports the product, its materials and printed artwork as a self-contained GLB. */
+  async exportGlb(extras = {}) {
+    if (!this.handle) throw new Error('Load a product before exporting a 3D mockup.');
+    const root = this.spin.clone(true);
+    root.name = extras.name || 'EliteHub 3D Mockup';
+    root.traverse((object) => {
+      if (object.name === '__ehSelectionFrame') {
+        object.parent?.remove(object);
+        return;
+      }
+      if (!object.isMesh || !object.material) return;
+      object.material = Array.isArray(object.material)
+        ? object.material.map((material) => material.clone())
+        : object.material.clone();
+    });
+    root.userData = { ...extras, format: 'EliteHub custom product', version: 1 };
+    const exporter = new GLTFExporter();
+    return new Promise((resolve, reject) => {
+      exporter.parse(root, (result) => {
+        if (result instanceof ArrayBuffer) resolve(new Blob([result], { type: 'model/gltf-binary' }));
+        else reject(new Error('The 3D mockup exporter did not return a binary GLB.'));
+      }, reject, { binary: true, onlyVisible: true, maxTextureSize: 4096 });
+    });
   }
 
   /* ------------------------------------------------------------ */
@@ -802,9 +930,9 @@ export class Studio extends EventTarget {
       appearance: { ...this.appearance },
       scene: { ...this.settings },
       layers: this.layers.map((l) => ({
-        id: l.id, type: l.type, name: l.name, src: l.type === 'image' ? l.src : null,
+        id: l.id, type: l.type, name: l.name, src: l.type === 'image' ? l.src : null, originalSrc: l.originalSrc,
         text: l.text, font: l.font, color: l.color,
-        size: l.size, rotation: l.rotation, opacity: l.opacity, visible: l.visible,
+        size: l.size, scaleX: l.scaleX, scaleY: l.scaleY, rotation: l.rotation, opacity: l.opacity, visible: l.visible,
         presetId: l.presetId, anchor: l.anchor,
       })),
       camera: { position: arr(this.camera.position), target: arr(this.controls.target) },

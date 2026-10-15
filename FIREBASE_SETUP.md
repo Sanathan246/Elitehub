@@ -52,5 +52,7 @@ firebase deploy --only firestore:rules
 - Dedicated sign-in and account creation screens are available at `login.html` and `signup.html`.
 - Saved delivery details are stored in `users/{uid}`.
 - Orders are stored in `users/{uid}/orders/{orderId}` and loaded into My Orders on another device.
+- Signed-in 3D previews and purchased 3D customizations are stored in `users/{uid}/customizations/{id}`. Firebase Storage holds the `.glb` mockup, `.json` design/order details and `.png` preview; the Firestore document holds product options and the order reference.
+- My Orders provides download links for the 3D mockup and design details. When a local copy is unavailable, the signed-in account downloads it from Firebase Storage.
 - Saved guest profiles remain local to the browser; checkout requires a signed-in account.
-- Custom preview images and local design files stay in browser storage so large image data is not written into Firestore.
+- Unsynced guest previews and working design files stay in browser storage. Large mockup assets are stored in Firebase Storage rather than embedded in Firestore documents.

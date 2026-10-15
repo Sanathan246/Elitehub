@@ -64,6 +64,22 @@
         <button class="studio-canvas-cart" type="button" data-open-cart><i data-icon="bag"></i><span>Bag</span><span class="cart-badge" hidden>0</span></button>
       </header>
 
+      <div class="p3d-layout-toolbar" id="layoutToolbar" aria-label="Design layout tools" hidden>
+        <div class="p3d-layout-views" id="designLayouts" role="group" aria-label="Choose design surface">
+          <button type="button" class="active" data-design-layout="front" aria-pressed="true">Front</button>
+          <button type="button" data-design-layout="back" aria-pressed="false">Back</button>
+          <button type="button" data-design-layout="side" aria-pressed="false">Sleeves / side</button>
+        </div>
+        <label class="p3d-layout-control p3d-layout-color"><span>Text colour</span><input id="layoutTextColor" type="color" value="#17151b" aria-label="Selected text colour" disabled></label>
+        <div class="p3d-layout-actions">
+          <button type="button" data-layout-act="add-text">Add Text</button>
+          <button type="button" data-layout-act="upload">Upload Design</button>
+          <button type="button" data-layout-act="save">Save Layout</button>
+          <button type="button" data-layout-act="load">Load Layout</button>
+          <button type="button" data-layout-act="reset">Reset</button>
+        </div>
+      </div>
+
       <div class="studio-canvas-stage p3d-stage" id="stage">
         <div class="studio-stage-label"><span>ELITEHUB / 3D PREVIEW</span><span id="stageHint">Drag to rotate. Scroll or pinch to zoom.</span></div>
 

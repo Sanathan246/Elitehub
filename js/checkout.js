@@ -129,6 +129,56 @@
       });
     }
 
+    async function savePurchasedCustomizations(api, user, order) {
+      const items = order.items.filter((item) => item.custom3d);
+      for (const item of items) {
+        const [mockup, detailsFile, preview] = await Promise.all([
+          EH.files.get(`mockup:${item.customId}`),
+          EH.files.get(`details:${item.customId}`),
+          EH.files.get(`previewBlob:${item.customId}`),
+        ]);
+        if (!(mockup instanceof Blob) || !(detailsFile instanceof Blob) || !(preview instanceof Blob)) {
+          throw new Error(`The 3D mockup files for ${item.name || 'your custom product'} are missing from this browser. Reopen the 3D studio and add the design to your bag again.`);
+        }
+        let details;
+        try {
+          details = JSON.parse(await detailsFile.text());
+        } catch (error) {
+          throw new Error(`The design details for ${item.name || 'your custom product'} could not be read. Reopen the 3D studio and add it to your bag again.`);
+        }
+        const purchasedDetails = new Blob([JSON.stringify({
+          ...details,
+          order: {
+            id: order.id,
+            date: order.date,
+            quantity: item.qty,
+            unitPrice: item.price,
+            productType: item.type,
+            color: item.color,
+            size: item.size || '',
+            model: item.model || '',
+            summary: item.summary || '',
+          },
+        }, null, 2)], { type: 'application/json' });
+        await api.saveCustomization(user.uid, item.customId, {
+          name: item.name,
+          product: item.name,
+          kind: details.kind,
+          productType: item.type,
+          color: EH.colors[item.color] ? EH.colors[item.color].name : 'Custom',
+          colorHex: details.colorHex || '',
+          finish: details.finish || '',
+          size: item.size || '',
+          model: item.model || '',
+          quantity: item.qty,
+          unitPrice: item.price,
+          summary: item.summary || '',
+          previewId: item.previewId || '',
+          orderId: order.id,
+        }, { mockup, details: purchasedDetails, preview });
+      }
+    }
+
     /* place order */
     form.addEventListener('submit', async (e) => {
       e.preventDefault();
@@ -175,6 +225,7 @@
         const btn = $('#placeOrder');
         btn.classList.add('is-loading');
         try {
+          await savePurchasedCustomizations(firebaseApi, orderUser, order);
           await firebaseApi.saveOrder(orderUser.uid, order);
           order.paymentId = await payOnline(order);
           order.status = 'Paid';
@@ -193,6 +244,7 @@
         return;
       }
       try {
+        await savePurchasedCustomizations(firebaseApi, orderUser, order);
         await firebaseApi.saveOrder(orderUser.uid, order);
       } catch (error) {
         if (whatsappWindow) whatsappWindow.close();

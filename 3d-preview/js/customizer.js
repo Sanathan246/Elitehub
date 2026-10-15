@@ -27,6 +27,9 @@ const DEFAULT_NAME = 'Elite Hub 3D Studio';
 
 const S = {
   previewId: null,
+  cloudPaths: null,
+  cloudSynced: false,
+  cloudOwnerUid: null,
   name: DEFAULT_NAME,
   folderId: null,
   tab: 'product',
@@ -102,6 +105,7 @@ function selectDesignLayout(layout) {
   renderLayerEditor();
 }
 let studio;
+let backgroundRemovalPipeline;
 
 async function init() {
   store.followAuth();
@@ -109,6 +113,7 @@ async function init() {
   window.EHStudio = studio; // handy for debugging in the console
 
   bindTabs();
+  bindLayoutToolbar();
   bindStage();
   bindFileInputs();
   renderViews();
@@ -121,8 +126,8 @@ async function init() {
   });
 
   studio.addEventListener('model', (e) => { if (!e.detail.paramsOnly) { resetOptions(); S.designLayout = 'front'; } renderAll(); });
-  studio.addEventListener('layers', () => { renderLayerList(); renderLayerEditor(true); updateDesignLayoutButtons(); markDirty(); });
-  studio.addEventListener('select', () => { syncDesignLayoutFromSelection(); renderLayerList(); renderLayerEditor(); });
+  studio.addEventListener('layers', () => { renderLayerList(); renderLayerEditor(true); updateDesignLayoutButtons(); syncLayoutToolbar(); markDirty(); });
+  studio.addEventListener('select', () => { syncDesignLayoutFromSelection(); renderLayerList(); renderLayerEditor(); syncLayoutToolbar(); });
   studio.addEventListener('view', (e) => {
     $$('#views button').forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.view === e.detail.view)));
     syncSpin();
@@ -195,6 +200,9 @@ async function openSaved(rec) {
   S.previewId = rec.id;
   S.name = rec.name;
   S.folderId = rec.folderId || null;
+  S.cloudPaths = rec.cloudPaths || null;
+  S.cloudSynced = !!rec.cloudSynced;
+  S.cloudOwnerUid = rec.cloudOwnerUid || null;
   S.dirty = false;
   renderAll();
 }
@@ -216,6 +224,97 @@ function bindTabs() {
   });
 }
 
+function bindLayoutToolbar() {
+  const toolbar = $('#layoutToolbar');
+  toolbar.addEventListener('click', async (e) => {
+    const layout = e.target.closest('[data-design-layout]');
+    if (layout) return selectDesignLayout(layout.dataset.designLayout);
+    const action = e.target.closest('[data-layout-act]')?.dataset.layoutAct;
+    try {
+      if (action === 'add-text') return addTextFromToolbar();
+      if (action === 'upload') return $('#artInput').click();
+      if (action === 'save') return save();
+      if (action === 'load') return openSavedLayoutChooser();
+      if (action === 'reset') return resetDesignLayers();
+    } catch (error) {
+      console.error(error);
+      EH.toast(error.message || 'That design action could not be completed.', { type: 'error' });
+    }
+  });
+  $('#layoutTextColor').addEventListener('input', (e) => {
+    const layer = studio.layers.find((item) => item.id === studio.selectedId);
+    if (layer?.type === 'text') studio.updateLayer(layer.id, { color: e.target.value });
+  });
+}
+
+function syncLayoutToolbar() {
+  const color = $('#layoutTextColor');
+  if (!color || !studio) return;
+  const selected = studio.layers.find((item) => item.id === studio.selectedId);
+  color.disabled = selected?.type !== 'text';
+  color.value = selected?.type === 'text' && /^#[0-9a-f]{6}$/i.test(selected.color) ? selected.color : '#17151b';
+  updateDesignLayoutButtons();
+}
+
+function addTextFromToolbar() {
+  const initialColor = EH.color.isLight(studio.appearance.color || '#ffffff') ? '#17151b' : '#f3eee7';
+  const modal = EH.modal.open(`
+    <h3>Add text to your design</h3>
+    <form class="p3d-form" data-layout-text-form>
+      <div class="field"><label for="layoutTextValue">Text</label><input class="input" id="layoutTextValue" maxlength="60" required placeholder="Type text to print" autocomplete="off"></div>
+      <div class="form-grid">
+        <div class="field"><label for="layoutFont">Font</label><select class="select" id="layoutFont">${TEXT_FONTS.map((font) => `<option value="${font.id}">${esc(font.label)}</option>`).join('')}</select></div>
+        <div class="field"><label for="layoutTextColorNew">Text colour</label><input class="input" id="layoutTextColorNew" type="color" value="${initialColor}"></div>
+      </div>
+      <div class="preview-actions"><button class="btn btn-ghost btn-sm" type="button" data-close-modal>Cancel</button><button class="btn btn-gold btn-sm" type="submit">Add text</button></div>
+    </form>`);
+  const input = $('#layoutTextValue', modal);
+  input.focus();
+  $('[data-layout-text-form]', modal).addEventListener('submit', async (event) => {
+    event.preventDefault();
+    const text = input.value.trim();
+    if (!text) return input.focus();
+    EH.modal.close();
+    setTab('design');
+    await studio.addLayer({
+      type: 'text', text, name: text,
+      color: $('#layoutTextColorNew', modal).value,
+      font: $('#layoutFont', modal).value,
+      presetId: layoutPreset()?.id,
+    });
+  });
+}
+
+async function openSavedLayoutChooser() {
+  const previews = await store.listPreviews();
+  if (!previews.length) return EH.toast('There are no saved layouts on this account yet.');
+  const modal = EH.modal.open(`
+    <h3>Load a saved layout</h3>
+    <p class="muted p3d-modal-lead">Choose one of your saved 3D designs.</p>
+    <div class="p3d-saved-layouts">${previews.map((preview) => `<button type="button" class="p3d-saved-layout" data-load-layout="${esc(preview.id)}"><img src="${esc(preview.thumbnail || '')}" alt=""><span><b>${esc(preview.name)}</b><small>${esc(preview.product || 'Custom product')}</small></span></button>`).join('')}</div>`);
+  modal.addEventListener('click', async (event) => {
+    const button = event.target.closest('[data-load-layout]');
+    if (!button) return;
+    const preview = await store.getPreview(button.dataset.loadLayout);
+    if (!preview) return EH.toast('That saved layout is no longer available.', { type: 'error' });
+    if (!(await confirmDiscard())) return;
+    EH.modal.close();
+    await openSaved(preview);
+    setTab('design');
+  });
+}
+
+async function resetDesignLayers() {
+  if (!studio.layers.length) return;
+  const discard = await EH.confirm('Reset this layout?', 'This removes all text and artwork from the product.', 'Reset layout');
+  if (!discard) return;
+  for (const layer of [...studio.layers]) studio.removeLayer(layer.id);
+  S.designLayout = 'front';
+  updateDesignLayoutButtons();
+  studio.setView('front');
+  syncLayoutToolbar();
+}
+
 function setTab(tab) {
   S.tab = tab;
   $$('.p3d-tab').forEach((t) => {
@@ -226,9 +325,11 @@ function setTab(tab) {
   });
   $$('.p3d-panel').forEach((p) => { p.hidden = p.id !== `panel-${tab}`; });
   studio.setEditing(tab === 'design');
+  $('#layoutToolbar').hidden = tab !== 'design';
   $('#stageHint').textContent = tab === 'design' && studio.layers.length
-    ? 'Drag your artwork to move it. Drag anywhere else to rotate.'
+    ? 'Drag artwork to move it; use an edge handle to stretch one way or a corner handle to stretch both ways.'
     : 'Drag to rotate. Scroll or pinch to zoom.';
+  syncLayoutToolbar();
   $('.p3d-panels').scrollTop = 0;
 }
 
@@ -239,6 +340,7 @@ function renderAll() {
   renderScene();
   renderExport();
   renderActions();
+  syncLayoutToolbar();
   syncSpin();
 
   document.title = 'Elite Hub 3D Studio — EliteHub';
@@ -402,42 +504,10 @@ function renderProduct() {
 /* ------------------------------------------------------------------ */
 function renderDesign() {
   const el = $('#panel-design');
-  const layoutButtons = DESIGN_LAYOUTS.map((layout) =>
-    '<button type="button" class="chip-btn" data-design-layout="' + layout.id + '" aria-pressed="' + (layout.id === S.designLayout) + '">' + layout.label + '</button>'
-  ).join('');
-  el.innerHTML = '<div class="opt-block p3d-opt p3d-layout-choice">' +
-    '<div class="opt-label"><span>Design placement</span></div>' +
-    '<div class="p3d-chips" id="designLayouts" role="group" aria-label="Choose design surface">' + layoutButtons + '</div>' +
-    '<p class="p3d-note">Choose a surface before adding artwork. Select a layer to move it between sides, or drag it on the model.</p>' +
-    '</div>' +
-    '<button type="button" class="studio-dropzone p3d-dropzone" data-act="art">' +
-    '<span class="upload-icon-wrap">' + icon('image') + '</span>' +
-    '<strong>Add artwork</strong>' +
-    '<span>PNG, JPG, WEBP or SVG up to 15 MB. Transparent PNGs print cleanest.</span>' +
-    '</button>' +
-    '<form class="p3d-addtext" data-addtext>' +
-    '<label class="sr-only" for="newText">Text to print</label>' +
-    '<input class="input" id="newText" maxlength="60" placeholder="Type text to print" autocomplete="off">' +
-    '<button class="btn btn-outline btn-sm" type="submit">' + icon('type') + ' Add text</button>' +
-    '</form>' +
+  el.innerHTML = '<p class="p3d-note">Use the layout bar above the preview to choose Front, Back or Sleeves, add text or artwork, and save your layout. Drag a design on the product to move it; use an edge handle to stretch one way or a corner handle to stretch both ways.</p>' +
     '<div class="p3d-layer-head"><h3 class="p3d-h">Layers</h3><span class="muted" id="layerCount"></span></div>' +
     '<ul class="p3d-layers" id="layerList"></ul>' +
     '<div id="layerEditor"></div>';
-
-  el.onclick = (e) => {
-    const layout = e.target.closest('[data-design-layout]');
-    if (layout) { selectDesignLayout(layout.dataset.designLayout); return; }
-    if (e.target.closest('[data-act="art"]')) $('#artInput').click();
-  };
-  $('[data-addtext]', el).onsubmit = async (e) => {
-    e.preventDefault();
-    const input = $('#newText');
-    const text = input.value.trim();
-    if (!text) { input.focus(); return; }
-    const color = EH.color.isLight(studio.appearance.color || '#ffffff') ? '#17151b' : '#f3eee7';
-    await studio.addLayer({ type: 'text', text, name: text, color, presetId: layoutPreset()?.id });
-    input.value = '';
-  };
   renderLayerList();
   renderLayerEditor();
 }
@@ -475,13 +545,6 @@ function renderLayerList() {
   };
 }
 
-function sizeLabel(size) {
-  const local = size / studio.scale;
-  if (kind() === 'upload') return `${Math.round(size * 100)}% of the model`;
-  if (tpl()?.garment) return `${Math.round(local * 100)} cm wide`;
-  return local >= 100 ? `${(local / 10).toFixed(local >= 300 ? 0 : 1)} cm wide` : `${Math.round(local)} mm wide`;
-}
-
 /** Re-renders the selected layer's controls. With `soft`, only refreshes values (keeps sliders under the pointer). */
 function renderLayerEditor(soft = false) {
   const box = $('#layerEditor');
@@ -490,8 +553,6 @@ function renderLayerEditor(soft = false) {
   if (!l) { box.innerHTML = ''; box.dataset.for = ''; return; }
   if (soft && box.dataset.for === l.id) {
     $$('[data-preset]', box).forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.preset === l.presetId)));
-    const s = $('[data-prop="size"]', box); if (s && document.activeElement !== s) s.value = l.size;
-    const sl = $('[data-out="size"]', box); if (sl) sl.textContent = sizeLabel(l.size);
     return;
   }
   box.dataset.for = l.id;
@@ -503,12 +564,16 @@ function renderLayerEditor(soft = false) {
         <div class="field"><label for="layerText">Text</label><textarea class="textarea p3d-textarea" id="layerText" rows="2" maxlength="120" data-prop="text">${esc(l.text)}</textarea></div>
         <div class="field"><label for="layerFont">Font</label><select class="select" id="layerFont" data-prop="font">${TEXT_FONTS.map((f) => `<option value="${f.id}" ${f.id === l.font ? 'selected' : ''}>${f.label}</option>`).join('')}</select></div>
         <div class="opt-block p3d-opt"><div class="opt-label"><span>Text colour</span></div>${swatches(colors, l.color, 'data-text-color')}</div>` : ''}
+      ${l.type === 'image' ? `
+        <div class="p3d-row">
+          <button class="btn btn-outline btn-sm" type="button" data-layer-act="remove-background">${icon('sparkles')} Remove background (AI)</button>
+          ${l.originalSrc ? `<button class="btn btn-ghost btn-sm" type="button" data-layer-act="restore-image">Restore original</button>` : ''}
+        </div>
+        <p class="p3d-note" data-background-status>Runs in your browser. Use an edge handle to stretch one way or a corner handle to stretch both ways.</p>` : ''}
       <div class="opt-block p3d-opt"><div class="opt-label"><span>Position</span></div>
         <div class="p3d-chips">${presets.map((p) => `<button type="button" class="chip-btn" data-preset="${p.id}" aria-pressed="${p.id === l.presetId}">${esc(p.label)}</button>`).join('')}</div>
         <p class="p3d-note">Or drag the artwork on the model.</p>
       </div>
-      <label class="p3d-range"><span>Size <output data-out="size">${sizeLabel(l.size)}</output></span>
-        <input type="range" min="0.02" max="0.8" step="0.001" value="${l.size}" data-prop="size"></label>
       <label class="p3d-range"><span>Rotation <output data-out="rotation">${Math.round(l.rotation)}°</output></span>
         <input type="range" min="-180" max="180" step="1" value="${l.rotation}" data-prop="rotation"></label>
       <label class="p3d-range"><span>Opacity <output data-out="opacity">${Math.round(l.opacity * 100)}%</output></span>
@@ -523,10 +588,10 @@ function renderLayerEditor(soft = false) {
   box.oninput = (e) => {
     const prop = e.target.dataset.prop;
     if (!prop) return;
-    if (prop === 'size' || prop === 'rotation' || prop === 'opacity') {
+    if (prop === 'rotation' || prop === 'opacity') {
       const v = Number(e.target.value);
       const out = $(`[data-out="${prop}"]`, box);
-      if (out) out.textContent = prop === 'size' ? sizeLabel(v) : prop === 'rotation' ? `${Math.round(v)}°` : `${Math.round(v * 100)}%`;
+      if (out) out.textContent = prop === 'rotation' ? `${Math.round(v)}°` : `${Math.round(v * 100)}%`;
       studio.updateLayer(l.id, { [prop]: v });
     } else if (prop === 'text') {
       clearTimeout(box._t);
@@ -546,7 +611,59 @@ function renderLayerEditor(soft = false) {
     if (a === 'duplicate') studio.duplicateLayer(l.id);
     if (a === 'up') studio.moveLayer(l.id, 1);
     if (a === 'down') studio.moveLayer(l.id, -1);
+    if (a === 'remove-background') removeImageBackground(l.id, e.target.closest('[data-layer-act]'));
+    if (a === 'restore-image' && l.originalSrc) {
+      studio.updateLayer(l.id, { src: l.originalSrc, originalSrc: null });
+      markDirty();
+      renderLayerEditor();
+    }
   };
+}
+
+async function removeImageBackground(layerId, button) {
+  const layer = studio.layers.find((item) => item.id === layerId);
+  if (!layer || layer.type !== 'image' || !button) return;
+  button.disabled = true;
+  const status = $('[data-background-status]', $('#layerEditor'));
+  if (status) status.textContent = 'Loading the in-browser AI model… The first download may take a moment.';
+  try {
+    if (!backgroundRemovalPipeline) {
+      backgroundRemovalPipeline = import('https://cdn.jsdelivr.net/npm/@huggingface/transformers@3.7.2')
+        .then(({ pipeline }) => pipeline('background-removal', 'Xenova/modnet', {
+          dtype: 'q8',
+          progress_callback: (event) => {
+            const progress = Number(event.progress);
+            if (status && Number.isFinite(progress)) status.textContent = `Downloading background-removal model… ${Math.round(progress)}%`;
+          },
+        }))
+        .catch((error) => {
+          backgroundRemovalPipeline = null;
+          throw error;
+        });
+    }
+    const remover = await backgroundRemovalPipeline;
+    if (status) status.textContent = 'Removing the background…';
+    const output = await remover(layer.src);
+    if (!output?.[0]) throw new Error('The AI model did not return a cutout.');
+    const blob = await output[0].toBlob();
+    if (!blob || !blob.size) throw new Error('The AI model returned an empty image.');
+    const src = await new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(reader.result);
+      reader.onerror = () => reject(new Error('The transparent image could not be read.'));
+      reader.readAsDataURL(blob);
+    });
+    await studio.updateLayer(layer.id, { src, originalSrc: layer.originalSrc || layer.src });
+    markDirty();
+    renderLayerEditor();
+    EH.toast('Background removed. You can restore the original image anytime.');
+  } catch (error) {
+    console.error('In-browser background removal failed.', error);
+    if (status) status.textContent = 'Background removal failed. Check your connection and try again.';
+    EH.toast(error.message || 'Background removal failed. Please try again.', { type: 'error', duration: 6000 });
+  } finally {
+    if (button.isConnected) button.disabled = false;
+  }
 }
 
 async function addArtworkFile(file) {
@@ -572,8 +689,8 @@ function renderFinish() {
     const list = EH.types[ptype].colors.map((c) => ({ id: c, label: EH.colors[c].name, hex: EH.colors[c].hex }));
     const cat = catalogueColorId();
     const what = k === 'frame' ? 'Frame colour' : 'Colour';
-    html += `<div class="opt-block p3d-opt"><div class="opt-label"><span>${what}: <b>${cat ? EH.colors[cat].name : 'Custom'}</b></span></div>${swatches(list, a.color)}
-      ${cat || !shopType() ? '' : `<p class="p3d-note">Custom colours are for previews. Pick a colour above to order this ${esc(tpl().label.toLowerCase())}.</p>`}</div>`;
+    html += `<div class="opt-block p3d-opt"><div class="opt-label"><span>${what}: <b data-colour-name>${cat ? EH.colors[cat].name : 'Custom'}</b></span></div>${swatches(list, a.color)}
+      ${shopType() ? `<p class="p3d-note" data-colour-note ${cat ? 'hidden' : ''}>Custom colours are for previews. Pick a colour above to order this ${esc(tpl().label.toLowerCase())}.</p>` : ''}</div>`;
     const fin = tpl()?.garment ? FABRIC_FINISHES : { mug: MUG_FINISHES, phonecase: GLOSS_FINISHES, cushion: CUSHION_FINISHES }[k];
     if (fin) {
       html += `<div class="opt-block p3d-opt"><div class="opt-label"><span>${tpl()?.garment || k === 'cushion' ? 'Fabric' : k === 'mug' ? 'Glaze' : 'Finish'}</span></div>
@@ -589,6 +706,24 @@ function renderFinish() {
   }
   el.innerHTML = html;
 
+  const updateColourPreview = (hex) => {
+    studio.setAppearance({ ...studio.appearance, color: hex });
+    const id = catalogueColorId();
+    const label = $('[data-colour-name]', el);
+    if (label) label.textContent = id ? EH.colors[id].name : 'Custom';
+    const note = $('[data-colour-note]', el);
+    if (note) note.hidden = !!id;
+    $$('[data-hex]', el).forEach((button) => button.classList.toggle('active', button.dataset.hex.toLowerCase() === hex.toLowerCase()));
+    const custom = $('.p3d-custom-swatch', el);
+    if (custom) {
+      custom.classList.toggle('active', !id);
+      const dot = $('span', custom);
+      if (dot) dot.style.background = id ? 'conic-gradient(#e6bf86,#b8a7d9,#1f2746,#5c1d28,#e6bf86)' : hex;
+    }
+    renderProduct();
+    renderActions();
+    markDirty();
+  };
   const apply = (patch) => { studio.setAppearance({ ...studio.appearance, ...patch }); renderFinish(); renderProduct(); renderActions(); markDirty(); };
   el.onclick = (e) => {
     const sw = e.target.closest('[data-hex]');
@@ -598,9 +733,7 @@ function renderFinish() {
     const ov = e.target.closest('[data-override]');
     if (ov) return apply({ override: ov.dataset.override === 'single' });
   };
-  el.oninput = (e) => {
-    if (e.target.matches('[data-custom-color]')) studio.setAppearance({ ...studio.appearance, color: e.target.value });
-  };
+  el.oninput = (e) => { if (e.target.matches('[data-custom-color]')) updateColourPreview(e.target.value); };
   el.onchange = (e) => { if (e.target.matches('[data-custom-color]')) apply({ color: e.target.value }); };
 }
 
@@ -679,6 +812,8 @@ function renderExport() {
     <div class="opt-block p3d-opt"><div class="opt-label"><span>Resolution</span><span class="muted" data-res-out>${exportSize(S.exportRes).join(' × ')} px</span></div>${seg('res', RES, S.exportRes, 'Resolution')}</div>
     <label class="check p3d-check"><input type="checkbox" data-transparent ${S.exportTransparent ? 'checked' : ''}> Transparent background</label>
     <button class="btn btn-outline btn-block" type="button" data-act="png">${icon('download')} Download image (PNG)</button>
+    <button class="btn btn-outline btn-block" type="button" data-act="glb">${icon('download')} Download 3D mockup (.GLB)</button>
+    <button class="btn btn-outline btn-block" type="button" data-act="details">${icon('download')} Download design details (.JSON)</button>
     <h3 class="p3d-h">360° video</h3>
     <div class="opt-block p3d-opt"><div class="opt-label"><span>Length</span></div>${seg('dur', DURATIONS, S.videoSeconds, 'Video length')}</div>
     <button class="btn btn-outline btn-block" type="button" data-act="video" ${rec ? '' : 'disabled'}>${icon('sparkles')} Record 360° video</button>
@@ -702,6 +837,8 @@ function renderExport() {
     if (d) { S.videoSeconds = Number(d.dataset.dur); return renderExport(); }
     const act = e.target.closest('[data-act]')?.dataset.act;
     if (act === 'png') downloadPng();
+    if (act === 'glb') downloadGlb();
+    if (act === 'details') downloadDetails();
     if (act === 'video') recordVideo();
   };
 }
@@ -712,6 +849,69 @@ async function downloadPng() {
   if (!blob) return EH.toast('The image could not be created. Try a smaller resolution.', { type: 'error' });
   EH.download(blob, `${slug(S.name)}-${w}x${h}.png`);
   EH.toast('Image downloaded');
+}
+
+function customizationDetails(id, order = null) {
+  const type = shopType();
+  const colorId = catalogueColorId();
+  const visible = studio.layers.filter((layer) => layer.visible);
+  const summary = visible.length
+    ? `3D design: ${visible.map((layer) => `${layer.type === 'text' ? `“${layer.text}”` : layer.name} (${placementLabel(layer).toLowerCase()})`).join(', ')}`
+    : '3D studio, no artwork';
+  return {
+    version: 1,
+    customizationId: id,
+    previewId: S.previewId,
+    orderId: order?.id || null,
+    name: S.name,
+    product: productLabel(),
+    kind: kind(),
+    productType: type,
+    color: colorId ? EH.colors[colorId].name : 'Custom',
+    colorHex: studio.appearance.color || '',
+    finish: studio.appearance.finish || '',
+    size: type && EH.types[type]?.sizes ? S.size || '' : '',
+    model: type && EH.types[type]?.models ? S.model || '' : '',
+    quantity: order?.quantity || S.qty,
+    unitPrice: type ? EH.types[type].basePrice + EH.sizeAdd(type, S.size) : 0,
+    summary,
+    state: studio.getState(),
+  };
+}
+
+function glbMetadata(details) {
+  return {
+    customizationId: details.customizationId,
+    product: details.product,
+    productType: details.productType || '',
+    color: details.color,
+    colorHex: details.colorHex,
+    finish: details.finish,
+    size: details.size,
+    model: details.model,
+    quantity: details.quantity,
+    unitPrice: details.unitPrice,
+    summary: details.summary,
+  };
+}
+
+async function downloadGlb() {
+  try {
+    const details = customizationDetails(S.previewId || EH.uid());
+    const mockup = await studio.exportGlb({ name: S.name, ...glbMetadata(details) });
+    EH.download(mockup, `${slug(S.name)}.glb`);
+    EH.toast('3D mockup downloaded');
+  } catch (error) {
+    console.error('3D mockup export failed.', error);
+    EH.toast(error.message || 'The 3D mockup could not be exported.', { type: 'error' });
+  }
+}
+
+function downloadDetails() {
+  const id = S.previewId || EH.uid();
+  const details = new Blob([JSON.stringify(customizationDetails(id), null, 2)], { type: 'application/json' });
+  EH.download(details, `${slug(S.name)}-details.json`);
+  EH.toast('Design details downloaded');
 }
 
 let recordAbort = null;
@@ -753,7 +953,7 @@ function renderActions() {
       <label class="studio-qty"><span>Quantity</span><span><button type="button" data-qty="-1" aria-label="Decrease quantity">−</button><input type="number" min="1" max="20" value="${S.qty}" id="qty" aria-label="Quantity"><button type="button" data-qty="1" aria-label="Increase quantity">+</button></span></label>
       <div class="p3d-action-row">
         <button class="btn btn-ghost" type="button" data-act="save">${icon('heart')} Save</button>
-        <button class="btn btn-gold studio-add-button" type="button" data-act="bag">${icon('bag')} Add to bag</button>
+        <button class="btn btn-gold studio-add-button" type="button" data-act="bag">${icon('bag')} Buy now</button>
       </div>` : `
       <button class="btn btn-gold btn-block studio-add-button" type="button" data-act="save">${icon('heart')} Save to Your 3D previews</button>
     `}`;
@@ -806,7 +1006,7 @@ async function save() {
 }
 
 async function doSave() {
-  const btns = $$('[data-act="save"]');
+  const btns = [...$$('[data-act="save"]'), ...$$('[data-layout-act="save"]')];
   btns.forEach((b) => { b.disabled = true; });
   try {
     const thumbnail = await studio.thumbnail(480);
@@ -823,15 +1023,68 @@ async function doSave() {
     });
     S.previewId = rec.id;
     S.dirty = false;
+    const firebaseApi = window.EHFirebase;
+    if (firebaseApi?.enabled) {
+      try {
+        await firebaseApi.ready;
+        const user = firebaseApi.currentUser;
+        if (user) {
+          const assets = await createCustomizationAssets(rec.id);
+          S.cloudPaths = await firebaseApi.saveCustomization(user.uid, rec.id, assets.metadata, assets.files);
+          S.cloudOwnerUid = user.uid;
+          S.cloudSynced = true;
+          await store.savePreview({ id: rec.id, cloudPaths: S.cloudPaths, cloudSynced: true, cloudOwnerUid: user.uid });
+        } else {
+          S.cloudSynced = false;
+        }
+      } catch (error) {
+        S.cloudSynced = false;
+        console.error('Saved preview could not sync to Firebase.', error);
+        EH.toast('Preview saved on this device, but Firebase sync failed: ' + (error.message || 'please try again.'), { type: 'error', duration: 6000 });
+      }
+    }
     history.replaceState(null, '', `${location.pathname}?id=${encodeURIComponent(rec.id)}`);
     renderAll();
-    EH.toast(`Saved “${rec.name}”`, { action: { label: 'View', href: '3d-preview/account.html#previews' } });
+    EH.toast(S.cloudSynced ? `Saved “${rec.name}” to your account` : `Saved “${rec.name}” on this device`, { action: { label: 'View', href: '3d-preview/account.html#previews' } });
   } catch (err) {
     console.error(err);
     EH.toast(/quota/i.test(err?.name || err?.message) ? 'Browser storage is full. Delete a few saved previews and try again.' : 'This preview could not be saved.', { type: 'error' });
   } finally {
     btns.forEach((b) => { b.disabled = false; });
   }
+}
+
+async function createCustomizationAssets(id, order = null) {
+  const details = customizationDetails(id, order);
+  const [mockup, preview] = await Promise.all([
+    studio.exportGlb({ name: details.name, ...glbMetadata(details) }),
+    studio.capture({ width: 1024, height: 1024, type: 'image/png' }),
+  ]);
+  if (!preview) throw new Error('A preview image could not be created.');
+  const files = {
+    mockup,
+    details: new Blob([JSON.stringify(details, null, 2)], { type: 'application/json' }),
+    preview,
+  };
+  return {
+    files,
+    metadata: {
+      name: details.name,
+      product: details.product,
+      kind: details.kind,
+      productType: details.productType || '',
+      color: details.color,
+      colorHex: details.colorHex,
+      finish: details.finish,
+      size: details.size,
+      model: details.model,
+      quantity: details.quantity,
+      unitPrice: details.unitPrice,
+      summary: details.summary,
+      previewId: details.previewId || '',
+      orderId: details.orderId || '',
+    },
+  };
 }
 
 async function addToBag() {
@@ -849,16 +1102,26 @@ async function addToBag() {
   try {
     const customId = EH.uid();
     const image = await studio.thumbnail(512);
-    const visible = studio.layers.filter((l) => l.visible);
-    const summary = visible.length
-      ? `3D design: ${visible.map((l) => `${l.type === 'text' ? `“${l.text}”` : l.name} (${placementLabel(l).toLowerCase()})`).join(', ')}`
-      : '3D studio, no artwork';
     const name = S.name !== DEFAULT_NAME ? S.name : T.label;
+    const details = customizationDetails(customId);
+    details.name = name;
+    const [mockup, preview] = await Promise.all([
+      studio.exportGlb({ name, ...glbMetadata(details) }),
+      studio.capture({ width: 1024, height: 1024, type: 'image/png' }),
+    ]);
+    if (!image || !preview) throw new Error('The product preview could not be prepared. Please try again.');
+    const filesSaved = await Promise.all([
+      EH.files.put(`mockup:${customId}`, mockup),
+      EH.files.put(`details:${customId}`, new Blob([JSON.stringify(details, null, 2)], { type: 'application/json' })),
+      EH.files.put(`previewBlob:${customId}`, preview),
+    ]);
+    if (filesSaved.some((saved) => !saved)) throw new Error('The 3D mockup could not be saved in this browser. Check available storage and try again.');
     const ok = EH.cart.add({
-      custom: true, customId, name, type, color: catalogueColorId(), size: T.sizes ? S.size : undefined, model: T.models ? S.model : undefined,
-      qty: S.qty, price: T.basePrice + EH.sizeAdd(type, S.size), image, summary,
+      custom: true, custom3d: true, customId, previewId: S.previewId || '', name, type, color: catalogueColorId(), size: T.sizes ? S.size : undefined, model: T.models ? S.model : undefined,
+      qty: S.qty, price: T.basePrice + EH.sizeAdd(type, S.size), image, summary: details.summary,
     });
     if (!ok) return;
+    const visible = studio.layers.filter((l) => l.visible);
     const print = visible.find((l) => l.type === 'image') || visible[0];
     if (print) {
       const data = print.type === 'image' ? print.src : print._tex?.image?.toDataURL?.('image/png');
@@ -866,7 +1129,10 @@ async function addToBag() {
     }
     EH.files.put(`preview:${customId}`, image).catch(() => {});
     EH.files.put(`3d:${customId}`, JSON.stringify(studio.getState())).catch(() => {});
-    EH.toast(`${name} added to your bag`, { action: { label: 'View bag', onClick: EH.openCart } });
+    location.assign('checkout.html');
+  } catch (error) {
+    console.error('3D customization could not be added to the bag.', error);
+    EH.toast(error.message || 'The 3D customization could not be added to your bag.', { type: 'error', duration: 6000 });
   } finally {
     btn.disabled = false;
   }

@@ -23,7 +23,10 @@
     cancelOrder() { return Promise.reject(unavailableError()); },
     listAllOrders() { return Promise.reject(unavailableError()); },
     subscribeAllOrders() { return () => {}; },
-    updateOrder() { return Promise.reject(unavailableError()); }
+    updateOrder() { return Promise.reject(unavailableError()); },
+    saveCustomization() { return Promise.reject(unavailableError()); },
+    getCustomization() { return Promise.resolve(null); },
+    downloadCustomizationAsset() { return Promise.reject(unavailableError()); }
   });
 
   if (missing.length) {
@@ -35,15 +38,17 @@
   }
 
   try {
-    const [appModule, authModule, firestoreModule] = await Promise.all([
+    const [appModule, authModule, firestoreModule, storageModule] = await Promise.all([
       import(`https://www.gstatic.com/firebasejs/${SDK_VERSION}/firebase-app.js`),
       import(`https://www.gstatic.com/firebasejs/${SDK_VERSION}/firebase-auth.js`),
-      import(`https://www.gstatic.com/firebasejs/${SDK_VERSION}/firebase-firestore.js`)
+      import(`https://www.gstatic.com/firebasejs/${SDK_VERSION}/firebase-firestore.js`),
+      import(`https://www.gstatic.com/firebasejs/${SDK_VERSION}/firebase-storage.js`)
     ]);
 
     const app = appModule.initializeApp(config);
     const auth = authModule.getAuth(app);
     const db = firestoreModule.getFirestore(app);
+    const storage = storageModule.getStorage(app);
     const persistenceReady = authModule.setPersistence(auth, authModule.browserLocalPersistence)
       .catch((error) => console.warn('Firebase browser persistence is unavailable.', error));
     let resolveAuthReady;
@@ -76,6 +81,7 @@
       app,
       auth,
       db,
+      storage,
       ready: Promise.all([persistenceReady, authReady]),
       currentUser: null,
       subscribeAuth(callback) {
@@ -196,6 +202,66 @@
         if (!Object.keys(data).length) return Promise.reject(new Error('At least one order field must be updated.'));
         data.updatedAt = firestoreModule.serverTimestamp();
         return firestoreModule.updateDoc(firestoreModule.doc(db, 'users', uid, 'orders', orderId), data);
+      },
+      async saveCustomization(uid, id, metadata = {}, assets = {}) {
+        if (!uid || !auth.currentUser || auth.currentUser.uid !== uid) throw new Error('Sign in to save this 3D mockup to your account.');
+        const customizationId = String(id || '');
+        if (!/^[A-Za-z0-9_-]{1,120}$/.test(customizationId)) throw new Error('This customization ID is invalid. Save the preview again.');
+        const base = `users/${uid}/customizations/${customizationId}`;
+        const specs = {
+          mockup: ['mockup.glb', 'model/gltf-binary'],
+          details: ['details.json', 'application/json'],
+          preview: ['preview.png', 'image/png']
+        };
+        const paths = {};
+        await Promise.all(Object.entries(specs).map(async ([key, [filename, contentType]]) => {
+          const blob = assets[key];
+          if (!(blob instanceof Blob) || !blob.size) throw new Error(`The ${key} file could not be prepared.`);
+          const path = `${base}/${filename}`;
+          await storageModule.uploadBytes(storageModule.ref(storage, path), blob, {
+            contentType,
+            customMetadata: { ownerUid: uid, customizationId }
+          });
+          paths[key] = path;
+        }));
+        const data = {
+          id: customizationId,
+          ownerUid: uid,
+          name: String(metadata.name || 'Custom 3D product').slice(0, 80),
+          product: String(metadata.product || '').slice(0, 120),
+          kind: String(metadata.kind || '').slice(0, 40),
+          productType: String(metadata.productType || '').slice(0, 40),
+          color: String(metadata.color || '').slice(0, 40),
+          colorHex: String(metadata.colorHex || '').slice(0, 16),
+          finish: String(metadata.finish || '').slice(0, 40),
+          size: String(metadata.size || '').slice(0, 40),
+          model: String(metadata.model || '').slice(0, 80),
+          quantity: Math.max(1, Math.min(20, Number(metadata.quantity) || 1)),
+          unitPrice: Math.max(0, Number(metadata.unitPrice) || 0),
+          summary: String(metadata.summary || '').slice(0, 1000),
+          previewId: String(metadata.previewId || '').slice(0, 120),
+          orderId: String(metadata.orderId || '').slice(0, 120),
+          assets: paths,
+          updatedAt: firestoreModule.serverTimestamp()
+        };
+        const docRef = firestoreModule.doc(db, 'users', uid, 'customizations', customizationId);
+        const previous = await firestoreModule.getDoc(docRef);
+        if (!previous.exists()) data.createdAt = firestoreModule.serverTimestamp();
+        await firestoreModule.setDoc(docRef, data, { merge: true });
+        return paths;
+      },
+      async getCustomization(uid, id) {
+        if (!uid || !auth.currentUser || auth.currentUser.uid !== uid) throw new Error('Sign in to open this saved mockup.');
+        const snapshot = await firestoreModule.getDoc(firestoreModule.doc(db, 'users', uid, 'customizations', String(id || '')));
+        return snapshot.exists() ? Object.assign({ id: snapshot.id }, snapshot.data()) : null;
+      },
+      async downloadCustomizationAsset(uid, path) {
+        if (!uid || !auth.currentUser || auth.currentUser.uid !== uid) throw new Error('Sign in to download this 3D mockup.');
+        const assetPath = String(path || '');
+        if (!assetPath.startsWith(`users/${uid}/customizations/`)) throw new Error('This mockup file does not belong to your account.');
+        const bytes = await storageModule.getBytes(storageModule.ref(storage, assetPath), 100 * 1024 * 1024);
+        const type = assetPath.endsWith('.glb') ? 'model/gltf-binary' : assetPath.endsWith('.json') ? 'application/json' : 'image/png';
+        return new Blob([bytes], { type });
       }
     };
 

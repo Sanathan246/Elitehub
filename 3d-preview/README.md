@@ -75,14 +75,19 @@ product's default colour, re-render its two images.
 - **Design**: add artwork (PNG, JPG, WEBP, SVG) or text in the site's fonts.
   New prints land on the side you're looking at; drag them across the model or
   snap them to a print position (front centre, left chest, back, sleeves…).
-  Size is shown in real units (cm on the tee, mm on the mug).
+  Drag a selected print's edge handles to stretch one way, or its corner
+  handles to resize both dimensions together. Artwork can be stretched up to
+  20× its starting size.
+  Image backgrounds can be removed with the in-browser MODNet AI tool; the
+  original image remains available to restore.
 - **Finish**: tee and mug colours come from `EH.types` / `EH.colors` in
   `js/mockups.js`, so they match the shop. Custom colours are allowed for
   previews but can't be ordered.
 - **Scene**: Studio dark (matches the reference video), Midnight, Studio light,
   Stone, transparent or any colour; three lighting setups; turntable.
-- **Export**: PNG up to 4K (square, landscape, portrait, transparent),
-  360° video (.mp4 in Chrome/Safari, .webm elsewhere).
+- **Export**: PNG up to 4K (square, landscape, portrait, transparent), a
+  self-contained 3D mockup (.glb), design details (.json), and 360° video
+  (.mp4 in Chrome/Safari, .webm elsewhere).
 - **Save**: to Your account › Your 3D previews, optionally into a folder.
 - **Add to bag** (any orderable product in a catalogue colour): uses `EH.cart.add` exactly
   like the 2D studio. The bag thumbnail is the 3D render; `EH.files` gets
@@ -98,18 +103,19 @@ Catalogue: `products.html?category=sweats&q=hood&orderable=1`.
 
 ## Where previews are stored
 
-In the browser's IndexedDB (`elitehub-3d-previews`), like the 2D studio's design
-files. Uploaded models and artwork are often several MB, far over Firestore's
-1 MB document limit.
+Saved previews stay in the browser's IndexedDB (`elitehub-3d-previews`).
+For a signed-in user, saving a preview also syncs its GLB mockup, PNG preview,
+JSON design details and metadata to that user's Firebase Storage and Firestore.
+At checkout the purchased 3D design and order reference are saved to Firebase;
+the GLB and design details can be downloaded again from order details.
 
 Each preview is tagged with the signed-in Firebase uid (or "guest"), and lists
 only show the current person's previews. If someone saved previews before
 signing in, the account page offers to add them to their account.
 
-To sync previews across devices later: keep the function names in `js/store.js`,
-store metadata in Firestore (e.g. `users/{uid}/previews/{id}`,
-`users/{uid}/previewFolders/{id}`) and files in Firebase Storage. Your current
-`firestore.rules` deny those paths, so they would need new rules.
+The account's saved-preview list and folders remain device-local. Firebase
+stores individual synced/purchased customization files under
+`users/{uid}/customizations/{id}`; it does not sync the preview list or folders.
 
 ## Main site integration
 

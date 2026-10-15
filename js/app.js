@@ -663,11 +663,27 @@
     if (typeof data !== 'string') setTimeout(() => URL.revokeObjectURL(url), 2000);
   };
 
-  /** Download a stored custom-design file ('print' = print-ready PNG, 'preview' = product mockup). */
+  /** Download a stored custom-design file, falling back to the signed-in user's Firebase copy. */
   EH.downloadDesign = async (customId, kind = 'print', filename) => {
-    const data = await EH.files.get(kind + ':' + customId);
-    if (!data) { EH.toast('That design file is no longer stored on this device.', { type: 'error' }); return; }
-    EH.download(data, filename || `elitehub-design-${customId}-${kind}.png`);
+    try {
+      let data = await EH.files.get(kind + ':' + customId);
+      if (!data && ['mockup', 'details', 'preview', 'previewBlob'].includes(kind) && window.EHFirebase?.enabled) {
+        const api = window.EHFirebase;
+        await api.ready;
+        const user = api.currentUser;
+        if (user) {
+          const record = await api.getCustomization(user.uid, customId);
+          const path = record?.assets?.[kind === 'previewBlob' || kind === 'preview' ? 'preview' : kind];
+          if (path) data = await api.downloadCustomizationAsset(user.uid, path);
+        }
+      }
+      if (!data) { EH.toast('That design file is no longer stored on this device or account.', { type: 'error' }); return; }
+      const extension = { mockup: 'glb', details: 'json', preview: 'png', previewBlob: 'png' }[kind] || 'png';
+      EH.download(data, filename || `elitehub-design-${customId}-${kind}.${extension}`);
+    } catch (error) {
+      console.error('Design file could not be downloaded.', error);
+      EH.toast(error.message || 'That design file could not be downloaded.', { type: 'error' });
+    }
   };
   /** Order line items with thumbnails + optional design-file buttons. */
   EH.orderItemsHTML = (items, withFiles) => (Array.isArray(items) ? items : []).map((it = {}) => {
@@ -677,7 +693,7 @@
     return `<div class="sum-item">
       <div class="cart-thumb">${EH.thumbHTML(it)}<span class="q">${qty}</span></div>
       <div><h4>${name}${it.custom ? '<span class="tag-custom">Custom</span>' : ''}</h4><div class="meta">${EH.esc(EH.optionMeta(it))}</div>
-        ${withFiles && it.custom && customId ? `<div style="display:flex;gap:12px;margin-top:6px;flex-wrap:wrap"><button type="button" class="link-arrow" data-dl-design="${customId}" data-kind="print" data-file="${customId}-print-file.png" style="font-size:12px;color:var(--gold)">${EH.icon('download')} Print file</button><button type="button" class="link-arrow" data-dl-design="${customId}" data-kind="preview" data-file="${customId}-preview.png" style="font-size:12px">${EH.icon('download')} Preview</button></div>` : ''}</div>
+        ${withFiles && it.custom && customId ? `<div style="display:flex;gap:12px;margin-top:6px;flex-wrap:wrap"><button type="button" class="link-arrow" data-dl-design="${customId}" data-kind="print" data-file="${customId}-print-file.png" style="font-size:12px;color:var(--gold)">${EH.icon('download')} Print file</button><button type="button" class="link-arrow" data-dl-design="${customId}" data-kind="preview" data-file="${customId}-preview.png" style="font-size:12px">${EH.icon('download')} Preview</button>${it.custom3d ? `<button type="button" class="link-arrow" data-dl-design="${customId}" data-kind="mockup" data-file="${customId}-mockup.glb" style="font-size:12px">${EH.icon('download')} 3D mockup (.GLB)</button><button type="button" class="link-arrow" data-dl-design="${customId}" data-kind="details" data-file="${customId}-details.json" style="font-size:12px">${EH.icon('download')} Design details (.JSON)</button>` : ''}</div>` : ''}</div>
       <div class="price" style="font-size:13.5px;font-weight:600">${EH.money((Number(it.price) || 0) * qty)}</div>
     </div>`;
   }).join('');

@@ -1,0 +1,30 @@
+rules_version = '2';
+
+service firebase.storage {
+  match /b/{bucket}/o {
+    function isAdmin() {
+      return request.auth != null
+        && request.auth.token.email == 'devildosti246@gmail.com'
+        && request.auth.token.email_verified == true;
+    }
+
+    function isOwner(userId) {
+      return request.auth != null && request.auth.uid == userId;
+    }
+
+    function validCustomizationAsset(assetName) {
+      return (assetName == 'mockup.glb' && request.resource.contentType == 'model/gltf-binary')
+        || (assetName == 'details.json' && request.resource.contentType == 'application/json')
+        || (assetName == 'preview.png' && request.resource.contentType == 'image/png');
+    }
+
+    match /users/{userId}/customizations/{customizationId}/{assetName} {
+      allow read: if isOwner(userId) || isAdmin();
+      allow create, update: if isOwner(userId)
+        && assetName in ['mockup.glb', 'details.json', 'preview.png']
+        && request.resource.size <= 104857600
+        && validCustomizationAsset(assetName);
+      allow delete: if isOwner(userId) || isAdmin();
+    }
+  }
+}
