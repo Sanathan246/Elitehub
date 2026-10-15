@@ -3,93 +3,35 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Design Studio — EliteHub | Make It Yours</title>
-  <meta name="description" content="Choose an EliteHub product, create your design and preview it in a detailed 2D product mockup.">
-  <meta name="theme-color" content="#09090a">
-  <link rel="icon" type="image/png" href="assets/favicon.png">
-  <link rel="apple-touch-icon" href="assets/apple-touch-icon.png">
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@400;500;600;700&family=Montserrat:wght@300;400;500;600;700&display=swap">
-  <link rel="stylesheet" href="css/style.css">
-  <script>document.documentElement.classList.add('js');</script>
+  <title>EliteHub 3D Studio</title>
+  <meta name="robots" content="noindex">
+  <link rel="canonical" href="3d-preview/customizer.html">
+  <script>
+    (function () {
+      const params = new URLSearchParams(location.search);
+      const destination = new URL('3d-preview/customizer.html', location.href);
+      const aliases = { tshirt: 'tee', tee: 'tee', hoodie: 'hoodie', mug: 'mug', phonecase: 'phonecase', tote: 'tote', cushion: 'cushion', frame: 'frame', poster: 'frame' };
+      const id = params.get('id');
+      const product = params.get('template') || params.get('product');
+      if (id) destination.searchParams.set('id', id);
+      else if (product) {
+        const key = product.toLowerCase();
+        destination.searchParams.set('template', aliases[key] || key);
+      } else if (params.get('start') === 'upload') {
+        destination.searchParams.set('start', 'upload');
+      } else if (['color', 'design', 'text', 'demo', 'model'].some((key) => params.has(key))) {
+        destination.searchParams.set('template', 'tee');
+      }
+      ['color', 'design', 'text', 'demo', 'model'].forEach((key) => {
+        const value = params.get(key);
+        if (value) destination.searchParams.set(key, value);
+      });
+      location.replace(destination.toString());
+    })();
+  </script>
+  <noscript><meta http-equiv="refresh" content="0; url=3d-preview/customizer.html"></noscript>
 </head>
-<body data-page="customize" data-header="solid">
-  <div id="site-header"></div>
-
-  <main class="studio-editor" aria-label="EliteHub Design Studio">
-    <aside class="studio-sidebar" aria-label="Design tools">
-      <div class="studio-sidebar-heading">
-        <div><span class="studio-kicker"><span class="studio-kicker-mark">EH</span> ELITEHUB STUDIO</span><h1>Make it <span class="gold-text">yours.</span></h1></div>
-        <button class="icon-btn studio-reset" type="button" id="resetBtn" aria-label="Start over" title="Start over"><i data-icon="returns"></i></button>
-      </div>
-
-      <section class="studio-tool-section studio-product-tool" aria-labelledby="catalogHeading">
-        <div class="studio-tool-title"><div><span class="studio-step-label">01 / CHOOSE</span><h2 id="catalogHeading">Your product</h2></div><span class="studio-result-count" id="productCount" aria-live="polite"></span></div>
-        <label class="studio-search"><i data-icon="search"></i><input type="search" id="productSearch" placeholder="Search all products" aria-label="Search products"></label>
-        <div class="studio-filters" id="categoryFilters" role="group" aria-label="Filter products"></div>
-        <div class="studio-product-grid" id="productGrid" aria-live="polite"></div>
-      </section>
-
-      <section class="studio-tool-section" aria-labelledby="optionsHeading">
-        <div class="studio-tool-title"><div><span class="studio-step-label">02 / PERSONALISE</span><h2 id="optionsHeading">Product options</h2></div></div>
-        <div class="selected-product-line"><div class="selected-product-thumb" id="selectedProductThumb"></div><div><h3 id="selectedProductName">Abstract Mind</h3><p id="selectedProductType">Oversized Tee</p></div><b id="selectedProductPrice">₹999</b></div>
-        <div class="studio-option-block" id="productOptions"></div>
-      </section>
-
-      <section class="studio-tool-section studio-art-tool" aria-labelledby="artworkHeading">
-        <div class="studio-tool-title"><div><span class="studio-step-label">03 / YOUR ART</span><h2 id="artworkHeading">Add artwork</h2></div><span class="upload-required">OPTIONAL</span></div>
-        <label class="studio-dropzone" id="artDropzone" for="artFileInput" tabindex="0">
-          <span class="upload-icon-wrap"><i data-icon="upload"></i></span>
-          <strong>Drop artwork or browse</strong><span>PNG · JPG · WEBP · SVG</span>
-          <input type="file" id="artFileInput" accept=".png,.jpg,.jpeg,.webp,.svg,image/png,image/jpeg,image/webp,image/svg+xml" hidden>
-        </label>
-        <p class="studio-format-line"><span>Image files up to 15 MB</span></p>
-        <div class="studio-upload-status" id="artUploadStatus" role="status" aria-live="polite">Your artwork stays on this device.</div>
-        <div class="studio-uploaded-file" id="uploadedFileCard" hidden><span class="uploaded-file-icon"><i data-icon="image"></i></span><span class="uploaded-file-name" id="uploadedFileName"></span><span class="uploaded-file-size" id="uploadedFileSize"></span><button type="button" id="removeArtBtn" aria-label="Remove uploaded artwork">×</button></div>
-      </section>
-
-      <section class="studio-elite-tool" aria-labelledby="eliteHeading">
-        <div class="studio-elite-heading"><span class="studio-elite-avatar">E</span><div><span class="studio-step-label">YOUR DESIGN COMPANION</span><h2 id="eliteHeading">Ask Elite</h2></div><span class="studio-elite-status">READY</span></div>
-        <div class="studio-elite-messages" id="eliteMessages" role="log" aria-live="polite">
-          <p class="studio-elite-message">Hi, I’m Elite. Tell me what you’re imagining and I’ll help you choose a product and colour.</p>
-        </div>
-        <div class="studio-elite-prompts" aria-label="Design ideas">
-          <button type="button" data-elite-prompt="I want a minimal black tee">Minimal tee</button>
-          <button type="button" data-elite-prompt="Help me choose a gift mug">Gift idea</button>
-        </div>
-        <form class="studio-elite-form" id="eliteForm"><label class="sr-only" for="eliteInput">Describe your design idea</label><input id="eliteInput" name="idea" maxlength="240" placeholder="Describe your idea…" autocomplete="off"><button type="submit" aria-label="Ask Elite"><i data-icon="arrow"></i></button></form>
-        <p class="studio-elite-note">Built-in design guidance · no account or API key needed</p>
-      </section>
-
-      <section class="studio-purchase-tool" aria-label="Add custom design to bag">
-        <div class="studio-buy-total"><span>Subtotal</span><strong id="studioSubtotal">₹999</strong></div>
-        <label class="studio-qty"><span>Quantity</span><span><button type="button" data-qty="-1" aria-label="Decrease quantity">−</button><input type="number" min="1" max="20" value="1" id="studioQty" aria-label="Quantity"><button type="button" data-qty="1" aria-label="Increase quantity">+</button></span></label>
-        <button class="btn btn-gold btn-block studio-add-button" type="button" id="addCartBtn"><i data-icon="bag"></i> Add to bag</button>
-        <p id="addCartHint">Choose a size to add this product to your bag.</p>
-      </section>
-    </aside>
-
-    <section class="studio-canvas" aria-label="2D product preview">
-      <header class="studio-canvas-toolbar">
-        <a class="studio-back-link" href="shop.html"><i data-icon="left"></i> Back to shop</a>
-        <div class="studio-canvas-brand"><span class="studio-canvas-dot"></span> 2D PRODUCT PREVIEW <span class="studio-toolbar-divider"></span><span id="viewerProductName">Oversized Tee</span></div>
-        <button class="studio-canvas-cart" type="button" data-open-cart><i data-icon="bag"></i><span>Bag</span><span class="cart-badge" hidden>0</span></button>
-      </header>
-      <div class="studio-canvas-stage" id="stageBox">
-        <div class="studio-stage-grid" aria-hidden="true"></div>
-        <div class="studio-stage-light" aria-hidden="true"></div>
-        <div class="studio-stage-label"><span>ELITEHUB / MADE FOR YOU</span><span id="previewCaption">Front-view product mockup</span></div>
-        <img id="staticPreview" class="studio-static-preview" alt="2D product mockup with your design">
-      </div>
-      <footer class="studio-canvas-footer"><span>YOUR IDEA, YOUR DESIGN.</span><span>Printed just for you <b>·</b> Secure checkout</span></footer>
-    </section>
-  </main>
-
-  <script src="js/config.js"></script>
-  <script src="js/mockups.js"></script>
-  <script src="js/products.js"></script>
-  <script src="js/app.js"></script>
-  <script src="js/design-studio.js"></script>
+<body>
+  <main><p>Opening the EliteHub 3D Studio… <a href="3d-preview/customizer.html">Continue</a></p></main>
 </body>
 </html>

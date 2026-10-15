@@ -44,6 +44,22 @@
 
   const shadow = (u, cx, cy, rx, ry, op = 0.5) => `<ellipse cx="${cx}" cy="${cy}" rx="${rx}" ry="${ry}" fill="#000" opacity="${op}" filter="url(#${u}b)"/>`;
   const sideGrad = (id, edge, mid = 0) => `<linearGradient id="${id}" x1="0" x2="1"><stop offset="0" stop-color="#000" stop-opacity="${edge}"/><stop offset=".24" stop-color="#000" stop-opacity="${mid}"/><stop offset=".76" stop-color="#000" stop-opacity="${mid}"/><stop offset="1" stop-color="#000" stop-opacity="${edge}"/></linearGradient>`;
+  const visualThreads = (baseHex) => {
+    const isDark = !isLight(baseHex);
+    const primary = isDark ? 'rgba(255,255,255,0.12)' : 'rgba(65,52,42,0.12)';
+    const secondary = isDark ? 'rgba(0,0,0,0.18)' : 'rgba(255,255,255,0.28)';
+    return `<g fill="none" stroke-linecap="round" opacity="${isDark ? 0.9 : 0.7}">
+      <path d="M54,108 Q200,136 346,108" stroke="${primary}" stroke-width="1.1"/>
+      <path d="M58,149 Q200,180 342,148" stroke="${secondary}" stroke-width="0.9"/>
+      <path d="M50,191 Q200,224 350,190" stroke="${primary}" stroke-width="1.1"/>
+      <path d="M62,232 Q200,260 338,230" stroke="${secondary}" stroke-width="0.9"/>
+      <path d="M72,272 Q200,300 328,270" stroke="${primary}" stroke-width="1.1"/>
+      <path d="M96,84 Q116,114 98,148" stroke="${secondary}" stroke-width="0.8"/>
+      <path d="M304,84 Q284,116 302,150" stroke="${secondary}" stroke-width="0.8"/>
+      <path d="M95,246 Q120,286 100,320" stroke="${secondary}" stroke-width="0.8"/>
+      <path d="M305,246 Q280,286 300,320" stroke="${secondary}" stroke-width="0.8"/>
+    </g>`;
+  };
 
   const TYPES = {
     tshirt: {
@@ -63,6 +79,7 @@
           <path d="M162,50 Q200,62 238,50 Q200,100 162,50 Z" fill="${inner}"/>
           <path d="M162,50 Q200,62 238,50 L236,46 Q200,57 164,46 Z" fill="${rib}"/>
           <path d="M162,50 Q200,100 238,50 L245,52 Q200,113 155,52 Z" fill="${rib}"/>
+          ${visualThreads(c)}
           <g fill="none" stroke="${seam}" stroke-width="1.3">
             <path d="M157,55 Q200,106 243,55" stroke-dasharray="2 2"/>
             <path d="M104,70 Q110,110 107,150"/><path d="M296,70 Q290,110 293,150"/>
@@ -109,6 +126,7 @@
           <path d="M100,332 Q200,342 300,332 L298,356 Q200,364 102,356 Z" fill="${rib}"/>
           <path d="M44,280 L78,292 L76,304 L42,292 Z" fill="${rib}"/><path d="M356,280 L322,292 L324,304 L358,292 Z" fill="${rib}"/>
           <path d="M138,256 Q200,250 262,256 L280,324 Q200,330 120,324 Z" fill="${c}"/>
+          ${visualThreads(c)}
           <g fill="none" stroke="${seam}" stroke-width="1.3">
             <path d="M138,256 Q200,250 262,256 L280,324 Q200,330 120,324 Z"/>
             <path d="M100,94 Q106,140 102,182"/><path d="M300,94 Q294,140 298,182"/>
@@ -166,7 +184,38 @@
     phonecase: {
       label: 'Phone Case', short: 'Phone Case', category: 'phone-cases', basePrice: 599,
       colors: ['black', 'white', 'navy', 'lavender'],
-      models: ['iPhone 16 Pro Max', 'iPhone 16 Pro', 'iPhone 16', 'iPhone 15 Pro Max', 'iPhone 15 Pro', 'iPhone 15', 'iPhone 14', 'iPhone 13', 'Samsung S24 Ultra', 'Samsung S24', 'OnePlus 12', 'Google Pixel 9'],
+      models: [
+        'iPhone 18 Pro Max', 'iPhone 18 Pro', 'iPhone 17 Pro Max', 'iPhone 17 Pro', 'iPhone Air', 'iPhone 17', 'iPhone 17e',
+        'iPhone 16 Pro Max', 'iPhone 16 Pro', 'iPhone 16 Plus', 'iPhone 16e', 'iPhone 16',
+        'iPhone 15 Pro Max', 'iPhone 15 Pro', 'iPhone 15 Plus', 'iPhone 15', 'iPhone 14 Pro Max', 'iPhone 14 Pro', 'iPhone 14 Plus', 'iPhone 14',
+        'iPhone 13 Pro Max', 'iPhone 13 Pro', 'iPhone 13', 'iPhone 13 mini', 'iPhone 12 Pro Max', 'iPhone 12 Pro', 'iPhone 12', 'iPhone 12 mini',
+        'iPhone 11 Pro Max', 'iPhone 11 Pro', 'iPhone 11',
+        'Galaxy S26 Ultra', 'Galaxy S26+', 'Galaxy S26', 'Galaxy S25 Ultra', 'Galaxy S25+', 'Galaxy S25 Edge', 'Galaxy S25 FE', 'Galaxy S25',
+        'Galaxy S24 Ultra', 'Galaxy S24+', 'Galaxy S24 FE', 'Galaxy S24', 'Galaxy S23 Ultra', 'Galaxy S23+', 'Galaxy S23 FE', 'Galaxy S23',
+        'Galaxy S22 Ultra', 'Galaxy S22+', 'Galaxy S22', 'Galaxy S21 Ultra', 'Galaxy S21+', 'Galaxy S21 FE', 'Galaxy S21',
+        'Galaxy A57 5G', 'Galaxy A56 5G', 'Galaxy A55 5G', 'Galaxy A54 5G', 'Galaxy A37 5G', 'Galaxy A36 5G', 'Galaxy A35 5G',
+        'Galaxy A27 5G', 'Galaxy A26 5G', 'Galaxy A25 5G', 'Galaxy A17 5G', 'Galaxy A16 5G', 'Galaxy A15 5G', 'Galaxy A14 5G',
+        'Galaxy Z Fold8', 'Galaxy Z Fold7', 'Galaxy Z Fold6', 'Galaxy Z Fold5', 'Galaxy Z Flip8', 'Galaxy Z Flip7', 'Galaxy Z Flip6', 'Galaxy Z Flip5',
+        'Pixel 11 Pro XL', 'Pixel 11 Pro', 'Pixel 11 Pro Fold', 'Pixel 11', 'Pixel 10 Pro XL', 'Pixel 10 Pro', 'Pixel 10 Pro Fold', 'Pixel 10', 'Pixel 10a',
+        'Pixel 9 Pro XL', 'Pixel 9 Pro', 'Pixel 9 Pro Fold', 'Pixel 9', 'Pixel 9a', 'Pixel 8 Pro', 'Pixel 8', 'Pixel 8a',
+        'Pixel 7 Pro', 'Pixel 7', 'Pixel 7a', 'Pixel 6 Pro', 'Pixel 6', 'Pixel 6a',
+        'OnePlus 15', 'OnePlus 13', 'OnePlus 13R', 'OnePlus 13s', 'OnePlus 12', 'OnePlus 12R', 'OnePlus 11', 'OnePlus 11R', 'OnePlus 10 Pro',
+        'OnePlus Nord 5', 'OnePlus Nord 4', 'OnePlus Nord 3',
+        'Xiaomi 17 Pro Max', 'Xiaomi 17 Pro', 'Xiaomi 17', 'Xiaomi 15', 'Xiaomi 14',
+        'Redmi Note 15 Pro+ 5G', 'Redmi Note 15 Pro 5G', 'Redmi Note 15 5G', 'Redmi Note 14 Pro+ 5G', 'Redmi Note 14 Pro 5G', 'Redmi Note 14 5G',
+        'Redmi Note 13 Pro+ 5G', 'Redmi Note 13 Pro 5G', 'Redmi Note 13 5G', 'Redmi Note 12 Pro+ 5G', 'Redmi Note 12 Pro 5G', 'Redmi Note 12 5G',
+        'POCO X8', 'POCO X7 Pro', 'POCO X7', 'POCO X6 Pro', 'POCO X6', 'POCO F8 Ultra', 'POCO F8 Pro', 'POCO F7', 'POCO F6',
+        'OPPO Reno16', 'OPPO Reno16c', 'OPPO Reno15 Pro', 'OPPO Reno15', 'OPPO Reno14 Pro', 'OPPO Reno14', 'OPPO Reno13 Pro', 'OPPO Reno13',
+        'OPPO Reno12 Pro', 'OPPO Reno12', 'OPPO Find X9 Ultra', 'OPPO Find X9 Pro', 'OPPO Find X9', 'OPPO Find X8 Pro', 'OPPO Find X8',
+        'vivo V70 Elite', 'vivo V70', 'vivo V60 Pro', 'vivo V60', 'vivo V50', 'vivo V40', 'vivo V40 Pro', 'vivo V30',
+        'vivo X300 Ultra', 'vivo X300 Pro', 'vivo X300 FE', 'vivo X300', 'vivo X200 Pro', 'vivo X200',
+        'vivo Y400', 'vivo Y300', 'vivo Y200', 'vivo T5 5G',
+        'motorola edge 70 max', 'motorola edge 70 pro', 'motorola edge 70', 'motorola edge 60 pro', 'motorola edge 60 fusion',
+        'motorola edge 60', 'motorola edge 50 ultra', 'motorola edge 50 pro', 'motorola edge 50 fusion', 'motorola edge 50 neo',
+        'motorola edge 50', 'motorola razr 70', 'motorola razr 60', 'motorola razr 50', 'moto g96', 'moto g86', 'moto g85', 'moto g75',
+        'realme 16 Pro+', 'realme 16 Pro', 'realme 16', 'realme 15 Pro+', 'realme 15 Pro', 'realme 15', 'realme 14 Pro+', 'realme 14 Pro', 'realme 14',
+        'Nothing Phone (3)', 'Nothing Phone (3a) Pro', 'Nothing Phone (3a)', 'Nothing Phone (2a) Plus', 'Nothing Phone (2a)'
+      ],
       print: { x: 128, y: 40, w: 144, h: 320 },
       art: { x: 128, y: 40, w: 144, h: 320 },
       sceneFill: true,

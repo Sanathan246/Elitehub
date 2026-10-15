@@ -64,7 +64,7 @@
       document.getElementById('resultCount').textContent = `${list.length} product${list.length === 1 ? '' : 's'}${st.q ? ` matching “${st.q}”` : ''}`;
       grid.innerHTML = list.length
         ? list.map((p, i) => EH.productCard(p, i)).join('')
-        : `<div class="empty-state" style="grid-column:1/-1">${EH.icon('search')}<h3>Nothing here yet</h3><p>Try a different search or category — or design exactly what you have in mind.</p><a class="btn btn-gold btn-sm" href="customize.html">Design Your Own ${EH.icon('arrow', 'ico-arrow')}</a></div>`;
+        : `<div class="empty-state" style="grid-column:1/-1">${EH.icon('search')}<h3>Nothing here yet</h3><p>Try a different search or category — or design exactly what you have in mind.</p><a class="btn btn-gold btn-sm" href="3d-preview/customizer.html">Design Your Own ${EH.icon('arrow', 'ico-arrow')}</a></div>`;
       heading();
       EH.reveal(grid);
     }

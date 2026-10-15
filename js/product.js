@@ -75,7 +75,12 @@
         history.replaceState(null, '', u);
       }
       document.getElementById('price').textContent = EH.money(p.price + EH.sizeAdd(p.type, st.size));
-      personalize.href = `customize.html?product=${p.type}&color=${st.color}&design=${p.design}`;
+      const studioParams = new URLSearchParams({
+        template: p.type === 'tshirt' ? 'tee' : p.type,
+        color: st.color,
+        design: p.design,
+      });
+      personalize.href = '3d-preview/customizer.html?' + studioParams.toString();
     };
     EH.bindOptions(opts, st, update);
     update();

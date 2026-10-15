@@ -404,7 +404,7 @@
           </div>
         </div>
       </header>
-      <nav class="mobile-nav" id="mobileNav" aria-label="Mobile" aria-hidden="true" inert>${NAV.concat([['customize', 'customize.html', 'Customize'], ['account', 'account.html', 'My Orders']]).map(([k, h, l]) => `<a href="${h}" class="${k === active ? 'active' : ''}">${l}</a>`).join('')}</nav>`;
+      <nav class="mobile-nav" id="mobileNav" aria-label="Mobile" aria-hidden="true" inert>${NAV.concat([['customize', '3d-preview/customizer.html', '3D Studio'], ['account', 'account.html', 'My Orders']]).map(([k, h, l]) => `<a href="${h}" class="${k === active ? 'active' : ''}">${l}</a>`).join('')}</nav>`;
     }
     const foot = EH.$('#site-footer');
     if (foot) {
@@ -412,7 +412,7 @@
       foot.outerHTML = `<footer class="site-footer">
         <div class="container footer-inner">
           <a class="footer-brand" href="index.html" aria-label="${C.brandName} — home"><img src="assets/logo-monogram.png" alt="" width="56" height="58"><img src="assets/logo-wordmark.png" alt="${C.brandName}" width="100" height="22"><span>${EH.esc(C.tagline || '')}</span></a>
-          <nav class="footer-nav" aria-label="Footer">${NAV.map(([, h, l]) => `<a href="${h}">${l}</a>`).join('')}<a href="customize.html">Customize</a><a href="account.html">My Orders</a></nav>
+          <nav class="footer-nav" aria-label="Footer">${NAV.map(([, h, l]) => `<a href="${h}">${l}</a>`).join('')}<a href="3d-preview/customizer.html">3D Studio</a><a href="account.html">My Orders</a></nav>
           <div class="footer-right">
             <div class="socials">${soc.map(([k, ic, l]) => `<a href="${C.social[k]}" target="_blank" rel="noopener" aria-label="${l}">${EH.icon(ic)}</a>`).join('')}</div>
             <p class="copyright">© ${new Date().getFullYear()} ${EH.esc(C.brandName)}. All rights reserved.</p>
@@ -455,14 +455,14 @@
       ship.innerHTML = (left > 0 ? `Add <b>${EH.money(left)}</b> more for <b>FREE shipping</b>` : `${EH.icon('truck', 'ico-sm')} You've unlocked <b>FREE shipping</b>!`.replace('<svg', '<svg style="display:inline;vertical-align:-3px;margin-right:4px;color:var(--gold)"')) + `<div class="ship-bar"><i style="width:${progress}%"></i></div>`;
     }
     if (!items.length) {
-      box.innerHTML = `<div class="cart-empty">${EH.icon('bag')}<h4>Your bag is empty</h4><p>Find something you love — or design your own.</p><a class="btn btn-gold btn-sm" href="shop.html">Shop Now ${EH.icon('arrow', 'ico-arrow')}</a><br><br><a class="link-arrow" href="customize.html">Create a custom design ${EH.icon('arrow')}</a></div>`;
+      box.innerHTML = `<div class="cart-empty">${EH.icon('bag')}<h4>Your bag is empty</h4><p>Find something you love — or design your own.</p><a class="btn btn-gold btn-sm" href="shop.html">Shop Now ${EH.icon('arrow', 'ico-arrow')}</a><br><br><a class="link-arrow" href="3d-preview/customizer.html">Create a 3D preview ${EH.icon('arrow')}</a></div>`;
       EH.$('[data-cart-foot]').hidden = true;
       return;
     }
      box.innerHTML = items.map((it) => {
        const qty = clampQty(it.qty);
        const lineId = EH.esc(String(it.lineId || ''));
-       const href = it.custom ? 'customize.html' : `product.html?id=${encodeURIComponent(String(it.productId || ''))}`;
+       const href = it.custom ? '3d-preview/customizer.html' : `product.html?id=${encodeURIComponent(String(it.productId || ''))}`;
        return `<div class="cart-line">
          <a class="cart-thumb" href="${href}">${EH.thumbHTML(it)}</a>
          <div><h4>${EH.esc(it.name)}${it.custom ? '<span class="tag-custom">Custom</span>' : ''}</h4><div class="meta">${EH.esc(EH.optionMeta(it))}</div>
@@ -549,7 +549,7 @@
     const res = EH.searchProducts(q);
     box.innerHTML = res.length
       ? `<p class="result-count">${res.length} result${res.length > 1 ? 's' : ''} for “${EH.esc(q)}”</p><div class="product-grid">${res.slice(0, 10).map(EH.productCard).join('')}</div>`
-      : `<div class="empty-state">${EH.icon('search')}<h3>No matches</h3><p>Try another word — or create exactly what you want.</p><a class="btn btn-gold btn-sm" href="customize.html">Design Your Own ${EH.icon('arrow', 'ico-arrow')}</a></div>`;
+      : `<div class="empty-state">${EH.icon('search')}<h3>No matches</h3><p>Try another word — or create exactly what you want.</p><a class="btn btn-gold btn-sm" href="3d-preview/customizer.html">Design in 3D ${EH.icon('arrow', 'ico-arrow')}</a></div>`;
     EH.$$('.reveal', box).forEach((el) => el.classList.add('in'));
   }
 

@@ -39,7 +39,11 @@
         content: `${art}<text x="104" y="174" transform="rotate(-8 100 160)" font-family="'Great Vibes', cursive" font-size="${txt.length > 11 ? 38 : 50}" fill="#f6efe6" text-anchor="middle">${txt}</text>`
       });
       const cta = document.getElementById('demoCta');
-      cta.href = `customize.html?product=tshirt&color=black&text=${encodeURIComponent(textIn.value.trim())}${img ? '&demo=1' : ''}`;
+      const studioParams = new URLSearchParams({ template: 'tee', color: 'black' });
+      if (img) studioParams.set('demo', '1');
+      else studioParams.set('design', 'mountain-soul');
+      if (textIn.value.trim()) studioParams.set('text', textIn.value.trim());
+      cta.href = '3d-preview/customizer.html?' + studioParams.toString();
     };
     if (img) document.getElementById('demoThumb').innerHTML = `<img src="${img}" alt="">`;
     textIn.addEventListener('input', draw);

@@ -1,0 +1,101 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <!-- Every relative link on this page (header, assets, css/style.css) resolves from the site root. -->
+  <base href="../">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>Elite Hub 3D Studio — EliteHub</title>
+  <meta name="description" content="Preview your design on a 3D product, or upload your own 3D mockup.">
+  <meta name="theme-color" content="#070609">
+  <link rel="icon" type="image/png" href="assets/favicon.png">
+  <link rel="apple-touch-icon" href="assets/apple-touch-icon.png">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@400;500;600;700&family=Montserrat:wght@300;400;500;600;700&family=Great+Vibes&family=Kaushan+Script&family=Bebas+Neue&family=Permanent+Marker&display=swap">
+  <link rel="stylesheet" href="css/style.css">
+  <link rel="stylesheet" href="3d-preview/css/preview3d.css">
+  <script type="importmap">
+    {
+      "imports": {
+        "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
+        "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"
+      }
+    }
+  </script>
+  <script>document.documentElement.classList.add('js');</script>
+</head>
+<body data-page="customize" data-header="solid" class="p3d">
+  <div id="site-header"></div>
+
+  <main class="studio-editor p3d-editor" aria-label="EliteHub 3D studio">
+    <aside class="studio-sidebar p3d-sidebar" aria-label="3D studio tools">
+      <div class="studio-sidebar-heading">
+        <div>
+          <span class="studio-kicker"><span class="studio-kicker-mark">3D</span> ELITEHUB 3D STUDIO</span>
+          <h1>See it in <span class="gold-text">3D.</span></h1>
+        </div>
+        <button class="icon-btn studio-reset" type="button" id="newPreview" aria-label="Start a new 3D preview" title="Start a new 3D preview"><i data-icon="plus"></i></button>
+      </div>
+
+      <div class="p3d-tabs" role="tablist" aria-label="3D studio steps">
+        <button class="p3d-tab active" type="button" role="tab" id="tab-product" aria-controls="panel-product" aria-selected="true" data-tab="product">Product</button>
+        <button class="p3d-tab" type="button" role="tab" id="tab-design" aria-controls="panel-design" aria-selected="false" data-tab="design" tabindex="-1">Design</button>
+        <button class="p3d-tab" type="button" role="tab" id="tab-finish" aria-controls="panel-finish" aria-selected="false" data-tab="finish" tabindex="-1">Finish</button>
+        <button class="p3d-tab" type="button" role="tab" id="tab-scene" aria-controls="panel-scene" aria-selected="false" data-tab="scene" tabindex="-1">Scene</button>
+        <button class="p3d-tab" type="button" role="tab" id="tab-export" aria-controls="panel-export" aria-selected="false" data-tab="export" tabindex="-1">Export</button>
+      </div>
+
+      <div class="p3d-panels">
+        <section class="p3d-panel" role="tabpanel" id="panel-product" aria-labelledby="tab-product"></section>
+        <section class="p3d-panel" role="tabpanel" id="panel-design" aria-labelledby="tab-design" hidden></section>
+        <section class="p3d-panel" role="tabpanel" id="panel-finish" aria-labelledby="tab-finish" hidden></section>
+        <section class="p3d-panel" role="tabpanel" id="panel-scene" aria-labelledby="tab-scene" hidden></section>
+        <section class="p3d-panel" role="tabpanel" id="panel-export" aria-labelledby="tab-export" hidden></section>
+      </div>
+
+      <section class="studio-purchase-tool p3d-actions" id="actions" aria-label="Save or order"></section>
+    </aside>
+
+    <section class="studio-canvas" aria-label="3D product preview">
+      <header class="studio-canvas-toolbar">
+        <a class="studio-back-link" href="3d-preview/products.html"><i data-icon="left"></i> All 3D products</a>
+        <div class="studio-canvas-brand"><span class="studio-canvas-dot"></span> 3D PRODUCT PREVIEW <span class="studio-toolbar-divider"></span><span id="viewerTitle">Elite Hub 3D Studio</span></div>
+        <button class="studio-canvas-cart" type="button" data-open-cart><i data-icon="bag"></i><span>Bag</span><span class="cart-badge" hidden>0</span></button>
+      </header>
+
+      <div class="studio-canvas-stage p3d-stage" id="stage">
+        <div class="studio-stage-label"><span>ELITEHUB / 3D PREVIEW</span><span id="stageHint">Drag to rotate. Scroll or pinch to zoom.</span></div>
+
+        <div class="p3d-viewbar" role="toolbar" aria-label="Camera">
+          <div class="p3d-views" id="views"></div>
+          <button class="p3d-spin" type="button" id="spinToggle" aria-pressed="false" title="Turntable">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 12a8 8 0 1 1-2.34-5.66"/><path d="M20 4v4.5h-4.5"/></svg>
+            <span>Spin</span>
+          </button>
+        </div>
+
+        <div class="p3d-overlay" id="loading" hidden><div class="p3d-loader" aria-hidden="true"></div><p id="loadingText">Loading model</p></div>
+        <div class="p3d-overlay p3d-drop" id="dropHint" hidden><p id="dropText">Drop to add artwork</p></div>
+        <div class="p3d-overlay" id="recording" hidden>
+          <p id="recordText">Recording 360° video</p>
+          <div class="ship-bar p3d-progress"><i id="recordBar" style="width:0%"></i></div>
+          <button class="btn btn-ghost btn-sm" type="button" id="recordCancel">Cancel</button>
+        </div>
+      </div>
+
+      <footer class="studio-canvas-footer"><span>YOUR IDEA, IN THE ROUND.</span><span>Saved previews live in <a class="gold" href="3d-preview/account.html#previews">Your account</a></span></footer>
+    </section>
+  </main>
+
+  <input type="file" id="modelInput" accept=".glb,.gltf,.obj,.stl,.fbx" hidden>
+  <input type="file" id="artInput" accept=".png,.jpg,.jpeg,.webp,.svg,image/png,image/jpeg,image/webp,image/svg+xml" hidden>
+
+  <script src="js/config.js"></script>
+  <script src="js/mockups.js"></script>
+  <script src="js/products.js"></script>
+  <script src="js/app.js"></script>
+  <script type="module" src="js/firebase.js"></script>
+  <script type="module" src="3d-preview/js/customizer.js"></script>
+</body>
+</html>

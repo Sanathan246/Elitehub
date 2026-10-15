@@ -1,0 +1,78 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <!-- Every relative link on this page (header, assets, css/style.css) resolves from the site root. -->
+  <base href="../">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>3D Products — EliteHub</title>
+  <meta name="description" content="Choose a product, add your design and see it in 3D before you order.">
+  <meta name="theme-color" content="#070609">
+  <link rel="icon" type="image/png" href="assets/favicon.png">
+  <link rel="apple-touch-icon" href="assets/apple-touch-icon.png">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@400;500;600;700&family=Montserrat:wght@300;400;500;600;700&family=Great+Vibes&family=Kaushan+Script&family=Bebas+Neue&family=Permanent+Marker&display=swap">
+  <link rel="stylesheet" href="css/style.css">
+  <link rel="stylesheet" href="3d-preview/css/preview3d.css">
+  <script>document.documentElement.classList.add('js');</script>
+</head>
+<body data-page="products3d" class="p3c">
+  <div id="site-header"></div>
+
+  <main>
+    <section class="page-hero p3c-hero">
+      <div class="hero-bg"></div>
+      <div class="stars" data-stars="80"></div>
+      <div class="container p3c-hero-inner">
+        <div>
+          <nav class="crumbs" aria-label="Breadcrumb"><a href="index.html">Home</a><span class="sep">/</span><span>3D Products</span></nav>
+          <h1>3D <span class="gold-text">Products</span></h1>
+          <p>Pick a product, add your design and turn it around in 3D before you order. Already have a 3D model? Bring it with you.</p>
+        </div>
+        <label class="search-field p3c-search"><i data-icon="search"></i><input type="search" id="catSearch" placeholder="Search tees, hoodies, mugs…" aria-label="Search 3D products"></label>
+      </div>
+    </section>
+
+    <section class="section-sm p3c-catalogue" aria-labelledby="catTitle">
+      <div class="container">
+        <h2 class="sr-only" id="catTitle">All 3D products</h2>
+        <div class="shop-toolbar p3c-toolbar">
+          <div class="chips" id="catChips" role="group" aria-label="Product categories"></div>
+          <div class="toolbar-right">
+            <label class="check p3c-orderable"><input type="checkbox" id="catOrderable"> Orderable on EliteHub</label>
+            <select class="select p3c-sort" id="catSort" aria-label="Sort products">
+              <option value="featured">Featured</option>
+              <option value="new">New first</option>
+              <option value="price">Price: low to high</option>
+              <option value="name">Name A–Z</option>
+            </select>
+          </div>
+        </div>
+        <p class="result-count" id="catCount" aria-live="polite"></p>
+        <div class="p3c-grid" id="catGrid"></div>
+      </div>
+    </section>
+
+    <section class="section-sm p3c-how" aria-labelledby="howTitle">
+      <div class="container">
+        <h2 class="section-title" id="howTitle">How the <em>3D studio</em> works</h2>
+        <ol class="p3c-steps">
+          <li><b>Pick a product</b><span>Start from any product above, or upload your own .glb, .obj, .stl or .fbx model.</span></li>
+          <li><b>Add your design</b><span>Drop in artwork or type text, then drag it across the product. Change colours, fabric and lighting.</span></li>
+          <li><b>Save, share or order</b><span>Keep it in Your 3D previews, download images and 360° videos, or add it to your bag.</span></li>
+        </ol>
+      </div>
+    </section>
+  </main>
+
+  <div id="site-footer"></div>
+
+  <script src="js/config.js"></script>
+  <script src="js/mockups.js"></script>
+  <script src="js/products.js"></script>
+  <script src="js/app.js"></script>
+  <script type="module" src="js/firebase.js"></script>
+  <script type="module" src="3d-preview/js/catalogue.js"></script>
+</body>
+</html>
