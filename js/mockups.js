@@ -72,20 +72,12 @@
         const L = isLight(c);
         const inner = shade(c, L ? -0.28 : -0.55);
         const rib = shade(c, L ? -0.08 : 0.07);
-        const seam = L ? 'rgba(0,0,0,.13)' : 'rgba(255,255,255,.07)';
         const rim = L ? 'rgba(0,0,0,.18)' : 'rgba(255,255,255,.16)';
         return `${shadow(u, 200, 366, 150, 12)}
           <path d="${TEE}" fill="${c}"/>
           <path d="M162,50 Q200,62 238,50 Q200,100 162,50 Z" fill="${inner}"/>
           <path d="M162,50 Q200,62 238,50 L236,46 Q200,57 164,46 Z" fill="${rib}"/>
           <path d="M162,50 Q200,100 238,50 L245,52 Q200,113 155,52 Z" fill="${rib}"/>
-          ${visualThreads(c)}
-          <g fill="none" stroke="${seam}" stroke-width="1.3">
-            <path d="M157,55 Q200,106 243,55" stroke-dasharray="2 2"/>
-            <path d="M104,70 Q110,110 107,150"/><path d="M296,70 Q290,110 293,150"/>
-            <path d="M41,144 L85,178"/><path d="M359,144 L315,178"/>
-            <path d="M106,345 Q200,355 294,345"/>
-          </g>
           <path d="${TEE}" fill="none" stroke="${rim}" stroke-width="1.2"/>`;
       },
       over(c, u) {
@@ -116,7 +108,6 @@
         const dark = shade(c, L ? -0.1 : -0.25);
         const inner = shade(c, L ? -0.3 : -0.6);
         const rib = shade(c, L ? -0.07 : 0.06);
-        const seam = L ? 'rgba(0,0,0,.14)' : 'rgba(255,255,255,.07)';
         const rim = L ? 'rgba(0,0,0,.18)' : 'rgba(255,255,255,.15)';
         return `${shadow(u, 200, 366, 160, 12)}
           <path d="${HOOD_BACK}" fill="${dark}"/>
@@ -126,13 +117,6 @@
           <path d="M100,332 Q200,342 300,332 L298,356 Q200,364 102,356 Z" fill="${rib}"/>
           <path d="M44,280 L78,292 L76,304 L42,292 Z" fill="${rib}"/><path d="M356,280 L322,292 L324,304 L358,292 Z" fill="${rib}"/>
           <path d="M138,256 Q200,250 262,256 L280,324 Q200,330 120,324 Z" fill="${c}"/>
-          ${visualThreads(c)}
-          <g fill="none" stroke="${seam}" stroke-width="1.3">
-            <path d="M138,256 Q200,250 262,256 L280,324 Q200,330 120,324 Z"/>
-            <path d="M100,94 Q106,140 102,182"/><path d="M300,94 Q294,140 298,182"/>
-            <path d="M102,336 Q200,346 298,336" stroke-dasharray="2 2"/>
-          </g>
-          <path d="M138,256 L120,324" stroke="${shade(c, L ? -0.25 : -0.5)}" stroke-width="3"/><path d="M262,256 L280,324" stroke="${shade(c, L ? -0.25 : -0.5)}" stroke-width="3"/>
           <path d="${HOODIE}" fill="none" stroke="${rim}" stroke-width="1.2"/><path d="${HOOD_BACK}" fill="none" stroke="${rim}" stroke-width="1"/>`;
       },
       over(c, u) {
