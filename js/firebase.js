@@ -13,6 +13,7 @@
     ready: Promise.resolve(null),
     currentUser: null,
     subscribeAuth() { return () => {}; },
+    signInWithGoogle() { return Promise.reject(unavailableError()); },
     saveProfile() { return Promise.reject(unavailableError()); },
     loadProfile() { return Promise.resolve(null); },
     clearProfile() { return Promise.resolve(); },
@@ -85,6 +86,13 @@
       },
       signUp(email, password) {
         return authModule.createUserWithEmailAndPassword(auth, email, password);
+      },
+      async signInWithGoogle() {
+        const provider = new authModule.GoogleAuthProvider();
+        provider.setCustomParameters({ prompt: 'select_account' });
+        const credential = await authModule.signInWithPopup(auth, provider);
+        const info = authModule.getAdditionalUserInfo(credential);
+        return { user: credential.user, isNewUser: Boolean(info && info.isNewUser) };
       },
       resetPassword(email) {
         return authModule.sendPasswordResetEmail(auth, email);

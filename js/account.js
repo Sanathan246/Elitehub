@@ -25,19 +25,45 @@
     const resetPassword = document.getElementById('resetPassword');
     const authNote = document.getElementById('authNote');
     const authDescription = document.getElementById('authDescription');
-    const authSession = document.getElementById('authSession');
-    const authUserEmail = document.getElementById('authUserEmail');
-    const authSignOut = document.getElementById('authSignOut');
+    const authPanel = document.getElementById('authPanel');
+    const authGoogleWrap = document.getElementById('authGoogleWrap');
+    const googleBtn = document.getElementById('googleSignIn');
+    const acctSignOut = document.getElementById('acctSignOut');
     const profileHub = document.getElementById('profileHub');
     const profileWelcome = document.getElementById('profileWelcome');
     const profileAccountEmail = document.getElementById('profileAccountEmail');
+    const acctAvatar = document.getElementById('acctAvatar');
+    const acctMeta = document.getElementById('acctMeta');
+    const orderTabs = document.getElementById('orderTabs');
+    const orderCount = document.getElementById('orderCount');
+    const loginSecurity = document.getElementById('loginSecurity');
+    const lsName = document.getElementById('lsName');
+    const lsNameEdit = document.getElementById('lsNameEdit');
+    const lsNameForm = document.getElementById('lsNameForm');
+    const lsNameInput = document.getElementById('lsNameInput');
+    const lsNameCancel = document.getElementById('lsNameCancel');
+    const lsEmail = document.getElementById('lsEmail');
+    const lsEmailTag = document.getElementById('lsEmailTag');
+    const lsPassword = document.getElementById('lsPassword');
+    const lsPasswordReset = document.getElementById('lsPasswordReset');
+    const lsMethods = document.getElementById('lsMethods');
+    const lsNote = document.getElementById('lsNote');
     let firebaseApi = null;
     let authUser = null;
     let authMode = 'login';
     let authBusy = false;
     let stopOrderUpdates = null;
+    let allOrders = [];
     let visibleOrders = [];
+    let orderFilter = 'all';
     const openOrderDetails = new Set();
+    const orderFilters = {
+      all: () => true,
+      open: (status) => !['Delivered', 'Cancelled'].includes(status),
+      delivered: (status) => status === 'Delivered',
+      cancelled: (status) => status === 'Cancelled'
+    };
+    const orderFilterLabels = { open: 'open', delivered: 'delivered', cancelled: 'cancelled' };
 
     const setNote = (el, message, type = '') => {
       if (!el) return;
@@ -120,15 +146,23 @@
     }
 
     function renderOrders(orders = readOrders()) {
-      visibleOrders = orders;
+      allOrders = orders;
+      const matches = orderFilters[orderFilter] || orderFilters.all;
+      visibleOrders = orders.filter((order) => matches(String(order.status || 'Placed')));
       const currentOrderIds = new Set(orders.map((order) => String(order.id || '')));
       openOrderDetails.forEach((id) => { if (!currentOrderIds.has(id)) openOrderDetails.delete(id); });
+      if (orderTabs) orderTabs.hidden = !orders.length;
+      if (orderCount) orderCount.textContent = orders.length ? `${orders.length} order${orders.length === 1 ? '' : 's'}` : '';
       if (!orders.length) {
         const message = authUser ? 'Your orders will appear here after you place one.' : 'When you place an order on this device, it will appear here.';
         box.innerHTML = `<div class="empty-state">${EH.icon('package')}<h3>No orders yet</h3><p>${message}</p><a class="btn btn-gold btn-sm" href="shop.html">Start Shopping ${EH.icon('arrow', 'ico-arrow')}</a></div>`;
         return;
       }
-      box.innerHTML = orders.map((o, i) => {
+      if (!visibleOrders.length) {
+        box.innerHTML = `<div class="empty-state">${EH.icon('package')}<h3>No ${EH.esc(orderFilterLabels[orderFilter] || '')} orders</h3><p>Nothing to show here right now.</p><button class="btn btn-outline btn-sm" type="button" data-order-filter-reset>Show all orders</button></div>`;
+        return;
+      }
+      box.innerHTML = visibleOrders.map((o, i) => {
         const orderId = String(o.id || 'Unavailable');
         const status = String(o.status || 'Placed');
         const statusClass = status.toLowerCase() === 'paid' ? 'paid' : '';
@@ -194,7 +228,25 @@
       }
     }
 
+    const setOrderFilter = (filter) => {
+      orderFilter = orderFilters[filter] ? filter : 'all';
+      if (orderTabs) {
+        orderTabs.querySelectorAll('[data-order-filter]').forEach((tab) => {
+          const active = tab.dataset.orderFilter === orderFilter;
+          tab.classList.toggle('active', active);
+          tab.setAttribute('aria-selected', String(active));
+        });
+      }
+      renderOrders(allOrders);
+    };
+
+    if (orderTabs) orderTabs.addEventListener('click', (e) => {
+      const tab = e.target.closest('[data-order-filter]');
+      if (tab) setOrderFilter(tab.dataset.orderFilter);
+    });
+
     box.addEventListener('click', (e) => {
+      if (e.target.closest('[data-order-filter-reset]')) { setOrderFilter('all'); return; }
       const detailsButton = e.target.closest('[data-order-details]');
       if (detailsButton) {
         const order = visibleOrders[Number(detailsButton.dataset.orderDetails)];
@@ -385,6 +437,68 @@
       return messages[code] || (code ? `Firebase sign-in failed (${code}). Check the Firebase Authentication settings.` : 'We could not complete that request. Please try again.');
     };
 
+    /* Returns '' when the person simply closed the Google window (nothing to report). */
+    const googleErrorMessage = (error) => {
+      const code = String(error && error.code || '');
+      if (code === 'auth/popup-closed-by-user' || code === 'auth/cancelled-popup-request') return '';
+      const messages = {
+        'auth/popup-blocked': 'Your browser blocked the Google sign-in window. Allow pop-ups for this site and try again.',
+        'auth/operation-not-allowed': 'Google sign-in is not enabled yet. Turn on Google under Authentication → Sign-in method in the Firebase console.',
+        'auth/account-exists-with-different-credential': 'An account already exists with this email using a different sign-in method. Sign in with your email and password instead.'
+      };
+      return messages[code] || authErrorMessage(error);
+    };
+
+    const initialsOf = (user) => {
+      const source = String(user && (user.displayName || user.email) || '').trim();
+      if (!source) return '?';
+      const parts = source.split(/[\s@._-]+/).filter(Boolean);
+      return ((parts[0] || '')[0] + (parts.length > 1 ? parts[1][0] : '')).toUpperCase() || '?';
+    };
+
+    const providerIds = (user) => (user && Array.isArray(user.providerData) ? user.providerData.map((p) => p && p.providerId).filter(Boolean) : []);
+
+    const renderAvatar = (user) => {
+      if (!acctAvatar) return;
+      acctAvatar.textContent = initialsOf(user);
+      const photo = String(user && user.photoURL || '');
+      if (/^https:\/\//i.test(photo)) {
+        const img = document.createElement('img');
+        img.alt = '';
+        img.referrerPolicy = 'no-referrer';
+        img.addEventListener('error', () => img.remove());
+        img.src = photo;
+        acctAvatar.appendChild(img);
+      }
+    };
+
+    const renderLoginSecurity = (user) => {
+      if (!loginSecurity) return;
+      loginSecurity.hidden = !user;
+      if (!user) return;
+      const providers = providerIds(user);
+      const hasPassword = providers.includes('password');
+      const hasGoogle = providers.includes('google.com');
+      lsName.textContent = user.displayName || 'Not set';
+      lsEmail.textContent = user.email || '';
+      lsEmailTag.hidden = !user.emailVerified;
+      lsPassword.textContent = hasPassword ? '••••••••' : 'Not set — you sign in with Google';
+      lsPasswordReset.hidden = !hasPassword;
+      lsMethods.textContent = [hasPassword ? 'Email & password' : '', hasGoogle ? 'Google' : ''].filter(Boolean).join(' · ') || 'Email';
+      lsNameForm.hidden = true;
+      lsNameEdit.hidden = false;
+      setNote(lsNote, '');
+    };
+
+    const renderMeta = (user) => {
+      if (!acctMeta) return;
+      const created = user && user.metadata && user.metadata.creationTime ? new Date(user.metadata.creationTime) : null;
+      const since = created && !Number.isNaN(created.getTime())
+        ? `Member since ${new Intl.DateTimeFormat('en-IN', { month: 'short', year: 'numeric' }).format(created)}`
+        : '';
+      acctMeta.textContent = since;
+    };
+
     const setAuthFieldState = (input, valid) => {
       const field = input.closest('.field');
       if (!field) return;
@@ -432,12 +546,17 @@
         authSubmit.classList.toggle('is-loading', busy);
       }
       if (resetPassword) resetPassword.disabled = busy;
+      if (googleBtn) {
+        googleBtn.disabled = busy;
+        googleBtn.classList.toggle('is-loading', busy);
+      }
       authTabs.forEach((tab) => { tab.disabled = busy; });
     };
 
     const setFirebaseAvailability = (api) => {
       const enabled = Boolean(api && api.enabled);
       authForm.querySelectorAll('input, button').forEach((control) => { control.disabled = !enabled; });
+      if (googleBtn) googleBtn.disabled = !enabled;
       if (enabled) {
         setNote(authNote, '');
         return;
@@ -493,10 +612,13 @@
       authUser = user || null;
       const signedIn = Boolean(authUser);
       if (profileHub) profileHub.hidden = !signedIn;
+      if (authPanel) authPanel.hidden = signedIn;
       if (authTabsBox) authTabsBox.hidden = signedIn;
       if (authForm) authForm.hidden = signedIn;
-      if (authSession) authSession.hidden = !signedIn;
-      if (authUserEmail) authUserEmail.textContent = signedIn ? (authUser.email || 'Signed-in account') : '';
+      if (authGoogleWrap) authGoogleWrap.hidden = signedIn;
+      renderAvatar(authUser);
+      renderMeta(authUser);
+      renderLoginSecurity(authUser);
       if (authDescription) authDescription.textContent = signedIn
         ? 'Your account is active. Saved details can sync securely across devices.'
         : 'Create an account to securely sync your saved delivery details across devices.';
@@ -504,7 +626,7 @@
         ? 'Used to fill in checkout faster. Synced securely to your signed-in account.'
         : 'Used to fill in checkout faster. Stored only on this device until you sign in.';
       if (signedIn) setNote(profileNote, 'Your signed-in profile is ready to use.', 'ok');
-      if (profileWelcome) profileWelcome.textContent = signedIn && authUser.displayName ? `Welcome, ${authUser.displayName}` : 'Welcome back';
+      if (profileWelcome) profileWelcome.textContent = signedIn && authUser.displayName ? authUser.displayName : 'Welcome back';
       if (profileAccountEmail) profileAccountEmail.textContent = signedIn ? (authUser.email || '') : '';
       if (signedIn) box.innerHTML = `<div class="panel">Loading your orders…</div>`;
       if (!signedIn && stopOrderUpdates) {
@@ -601,17 +723,104 @@
       }
     });
 
-    authSignOut.addEventListener('click', async () => {
+    if (acctSignOut) acctSignOut.addEventListener('click', async () => {
       if (!firebaseApi || !firebaseApi.enabled || authBusy) return;
       setAuthBusy(true);
       try {
         await firebaseApi.signOut();
         setAuthMode('login');
         setNote(profileNote, 'Signed out. Your local saved details are still available on this device.', 'ok');
+        window.scrollTo({ top: 0, behavior: 'smooth' });
       } catch (error) {
-        setNote(authNote, authErrorMessage(error), 'err');
+        setNote(profileNote, authErrorMessage(error), 'err');
       } finally {
         setAuthBusy(false);
+      }
+    });
+
+    /* Sign in with Google */
+    if (googleBtn) googleBtn.addEventListener('click', async () => {
+      if (authBusy) return;
+      if (!firebaseApi || !firebaseApi.enabled) {
+        setNote(authNote, 'Add your Firebase web app config in js/config.js to enable account login.');
+        return;
+      }
+      setAuthBusy(true);
+      setNote(authNote, '');
+      try {
+        await firebaseApi.ready;
+        const result = await firebaseApi.signInWithGoogle();
+        if (result.isNewUser) {
+          const user = result.user;
+          if (user.displayName && !form.elements.name.value.trim()) form.elements.name.value = user.displayName;
+          if (user.email && !form.elements.email.value.trim()) form.elements.email.value = user.email;
+          const data = readProfile();
+          if (hasProfile(data)) {
+            EH.store.set('eh_profile', data);
+            try { await firebaseApi.saveProfile(user.uid, data); } catch (error) { console.warn('Firebase profile save after Google sign-up failed.', error); }
+          }
+          EH.toast('Your EliteHub account is ready');
+        } else {
+          EH.toast('Welcome back to EliteHub');
+        }
+      } catch (error) {
+        setNote(authNote, googleErrorMessage(error), 'err');
+      } finally {
+        setAuthBusy(false);
+      }
+    });
+
+    /* Login & Security */
+    const closeNameEdit = () => {
+      lsNameForm.hidden = true;
+      lsNameEdit.hidden = false;
+    };
+
+    lsNameEdit.addEventListener('click', () => {
+      lsNameInput.value = authUser && authUser.displayName ? authUser.displayName : '';
+      lsNameForm.hidden = false;
+      lsNameEdit.hidden = true;
+      setNote(lsNote, '');
+      lsNameInput.focus();
+    });
+
+    lsNameCancel.addEventListener('click', closeNameEdit);
+
+    lsNameForm.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const name = lsNameInput.value.trim();
+      if (name.length < 2) {
+        setNote(lsNote, 'Please enter at least 2 characters.', 'err');
+        lsNameInput.focus();
+        return;
+      }
+      if (!authUser || !firebaseApi || !firebaseApi.enabled) return;
+      try {
+        await firebaseApi.ready;
+        await firebaseApi.updateUser(authUser, { displayName: name });
+        lsName.textContent = name;
+        if (profileWelcome) profileWelcome.textContent = name;
+        renderAvatar(authUser);
+        closeNameEdit();
+        setNote(lsNote, 'Your name has been updated.', 'ok');
+        EH.toast('Your name has been updated');
+      } catch (error) {
+        console.warn('Firebase display name update failed.', error);
+        setNote(lsNote, 'We could not update your name. Please try again.', 'err');
+      }
+    });
+
+    lsPasswordReset.addEventListener('click', async () => {
+      if (!authUser || !authUser.email || !firebaseApi || !firebaseApi.enabled) return;
+      lsPasswordReset.disabled = true;
+      try {
+        await firebaseApi.ready;
+        await firebaseApi.resetPassword(authUser.email);
+        setNote(lsNote, `A password reset link has been sent to ${authUser.email}.`, 'ok');
+      } catch (error) {
+        setNote(lsNote, authErrorMessage(error), 'err');
+      } finally {
+        lsPasswordReset.disabled = false;
       }
     });
 

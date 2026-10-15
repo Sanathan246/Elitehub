@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>My Profile — EliteHub</title>
+  <title>Your Account — EliteHub</title>
   <meta name="robots" content="noindex">
   <meta name="theme-color" content="#070609">
   <link rel="icon" type="image/png" href="assets/favicon.png">
@@ -23,13 +23,14 @@
       <div class="stars" data-stars="80"></div>
       <div class="container">
         <nav class="crumbs" aria-label="Breadcrumb"><a href="index.html">Home</a><span class="sep">/</span><span>My Account</span></nav>
-        <h1>My <span class="gold-text">Profile</span></h1>
-        <p>Manage your account, review orders and update your contact and delivery details.</p>
+        <h1>Your <span class="gold-text">Account</span></h1>
+        <p>Manage your orders, sign-in details and delivery addresses in one place.</p>
       </div>
     </section>
 
     <section class="section account-access" aria-labelledby="accountAccessTitle">
       <div class="container">
+        <!-- Signed out: sign in / create account -->
         <div class="account-auth panel" id="authPanel">
           <div class="account-auth-copy">
             <p class="eyebrow">Private account</p>
@@ -46,6 +47,13 @@
             <div class="auth-tabs" role="tablist" aria-label="Account access">
               <button class="auth-tab active" type="button" role="tab" aria-selected="true" data-auth-mode="login">Sign in</button>
               <button class="auth-tab" type="button" role="tab" aria-selected="false" data-auth-mode="signup">Create account</button>
+            </div>
+            <div class="auth-google" id="authGoogleWrap">
+              <button class="g-btn" id="googleSignIn" type="button">
+                <svg class="g-ico" viewBox="0 0 48 48" aria-hidden="true"><path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"/><path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"/><path fill="#FBBC05" d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z"/><path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.15 1.45-4.92 2.3-8.16 2.3-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"/></svg>
+                <span>Continue with Google</span>
+              </button>
+              <div class="auth-or" role="separator"><span>or use email</span></div>
             </div>
             <form id="authForm" novalidate>
               <div class="field auth-name-field" hidden>
@@ -74,49 +82,124 @@
               </div>
               <p class="form-note" id="authNote" role="status" aria-live="polite"></p>
             </form>
-            <div class="auth-session" id="authSession" hidden>
-              <p class="eyebrow">Signed in</p>
-              <p class="auth-session-email" id="authUserEmail"></p>
-              <p class="muted">Your saved details can now sync securely to your account.</p>
-              <button class="btn btn-ghost btn-block" id="authSignOut" type="button">Sign out</button>
-            </div>
           </div>
         </div>
-        <div class="panel" id="profileHub" hidden>
-          <p class="eyebrow">Your EliteHub account</p>
-          <h2 id="profileWelcome">Welcome back</h2>
-          <p class="auth-session-email" id="profileAccountEmail"></p>
-          <ul class="account-benefits">
-            <li><span aria-hidden="true">&#10003;</span><a href="#ordersSection">My Orders</a></li>
-            <li><span aria-hidden="true">&#10003;</span><a href="#savedDetails">Contact and delivery details</a></li>
-            <li><span aria-hidden="true">&#10003;</span><a href="contact.html">Contact EliteHub support</a></li>
-          </ul>
+
+        <!-- Signed in: Amazon-style account hub -->
+        <div class="acct-hub" id="profileHub" hidden>
+          <div class="acct-id panel">
+            <div class="acct-avatar" id="acctAvatar" aria-hidden="true"></div>
+            <div class="acct-id-copy">
+              <p class="eyebrow">Your EliteHub account</p>
+              <h2 id="profileWelcome">Welcome back</h2>
+              <p class="auth-session-email" id="profileAccountEmail"></p>
+              <p class="acct-meta" id="acctMeta"></p>
+            </div>
+            <button class="btn btn-ghost btn-sm" id="acctSignOut" type="button">Sign out</button>
+          </div>
+
+          <h2 class="acct-hub-title">Your <em>Account</em></h2>
+          <div class="acct-tiles">
+            <a class="acct-tile" href="#ordersSection">
+              <span class="acct-tile-ico"><i data-icon="package"></i></span>
+              <div><h3>Your Orders</h3><p>Track, cancel or buy items again</p></div>
+            </a>
+            <a class="acct-tile" href="#loginSecurity">
+              <span class="acct-tile-ico"><i data-icon="shield"></i></span>
+              <div><h3>Login &amp; Security</h3><p>Edit your name and manage your password</p></div>
+            </a>
+            <a class="acct-tile" href="#savedDetails">
+              <span class="acct-tile-ico"><i data-icon="pin"></i></span>
+              <div><h3>Your Addresses</h3><p>Edit delivery and contact details</p></div>
+            </a>
+            <button class="acct-tile" id="tileBag" type="button" data-open-cart>
+              <span class="acct-tile-ico"><i data-icon="bag"></i></span>
+              <div><h3>Your Bag</h3><p>View items waiting to be ordered</p></div>
+            </button>
+            <a class="acct-tile" href="customize.html">
+              <span class="acct-tile-ico"><i data-icon="palette"></i></span>
+              <div><h3>Design Studio</h3><p>Customize a tee, hoodie, mug and more</p></div>
+            </a>
+            <a class="acct-tile" href="contact.html">
+              <span class="acct-tile-ico"><i data-icon="mail"></i></span>
+              <div><h3>Customer Service</h3><p>Get help with an order or product</p></div>
+            </a>
+          </div>
         </div>
       </div>
     </section>
 
-    <section class="section" id="ordersSection">
+    <section class="section acct-lower" id="ordersSection">
       <div class="container" style="display:grid;grid-template-columns:minmax(0,1.6fr) minmax(280px,1fr);gap:30px;align-items:start" id="accountGrid">
-        <div class="orders" id="orders"></div>
-        <aside class="panel" id="savedDetails" aria-labelledby="savedDetailsTitle">
-          <h2 id="savedDetailsTitle">Saved Details</h2>
-          <p class="muted" id="profileStorageNote" style="font-size:13px;margin:-8px 0 18px">Used to fill in checkout faster. Stored only on this device until you sign in.</p>
-          <form id="profileForm" novalidate>
-            <div class="form-grid" style="grid-template-columns:1fr">
-              <div class="field"><label for="p-name">Full name</label><input class="input" id="p-name" name="name" autocomplete="name" aria-describedby="p-name-error"><span class="err-msg" id="p-name-error">Please enter at least 2 characters.</span></div>
-              <div class="field"><label for="p-phone">Mobile</label><input class="input" id="p-phone" name="phone" type="tel" inputmode="tel" autocomplete="tel" aria-describedby="p-phone-error"><span class="err-msg" id="p-phone-error">Please enter a valid mobile number.</span></div>
-              <div class="field"><label for="p-email">Email</label><input class="input" id="p-email" name="email" type="email" autocomplete="email" aria-describedby="p-email-error"><span class="err-msg" id="p-email-error">Please enter a valid email address.</span></div>
-              <div class="field"><label for="p-address1">Address</label><input class="input" id="p-address1" name="address1" autocomplete="address-line1" aria-describedby="p-address1-error"><span class="err-msg" id="p-address1-error">Please enter at least 4 characters.</span></div>
-              <div class="field"><label for="p-address2">Area, landmark</label><input class="input" id="p-address2" name="address2" autocomplete="address-line2"></div>
-              <div class="field"><label for="p-city">City</label><input class="input" id="p-city" name="city" autocomplete="address-level2" aria-describedby="p-city-error"><span class="err-msg" id="p-city-error">Please enter at least 2 characters.</span></div>
-              <div class="field"><label for="p-pincode">PIN code</label><input class="input" id="p-pincode" name="pincode" inputmode="numeric" maxlength="6" pattern="[1-9][0-9]{5}" autocomplete="postal-code" aria-describedby="p-pincode-error"><span class="err-msg" id="p-pincode-error">Please enter a valid 6-digit PIN code.</span></div>
-              <div class="field"><label for="p-state">State</label><input class="input" id="p-state" name="state" autocomplete="address-level1" aria-describedby="p-state-error"><span class="err-msg" id="p-state-error">Please enter a state.</span></div>
-            </div>
-            <button class="btn btn-gold btn-block" type="submit" style="margin-top:20px">Save Details</button>
-            <button class="btn btn-ghost btn-block btn-sm" type="button" id="clearData" style="margin-top:10px">Clear saved data</button>
-            <p class="form-note" id="profileNote" role="status" aria-live="polite"></p>
-          </form>
-        </aside>
+        <div class="acct-main">
+          <div class="acct-head">
+            <h2>Your <em>Orders</em></h2>
+            <span class="muted" id="orderCount"></span>
+          </div>
+          <div class="acct-order-tabs" id="orderTabs" role="tablist" aria-label="Filter orders" hidden>
+            <button class="acct-order-tab active" type="button" role="tab" aria-selected="true" data-order-filter="all">All orders</button>
+            <button class="acct-order-tab" type="button" role="tab" aria-selected="false" data-order-filter="open">Open</button>
+            <button class="acct-order-tab" type="button" role="tab" aria-selected="false" data-order-filter="delivered">Delivered</button>
+            <button class="acct-order-tab" type="button" role="tab" aria-selected="false" data-order-filter="cancelled">Cancelled</button>
+          </div>
+          <div class="orders" id="orders"></div>
+        </div>
+
+        <div class="acct-side">
+          <section class="panel" id="loginSecurity" aria-labelledby="loginSecurityTitle" hidden>
+            <h2 id="loginSecurityTitle">Login &amp; Security</h2>
+            <dl class="acct-rows">
+              <div class="acct-row">
+                <dt>Name</dt>
+                <dd id="lsName"></dd>
+                <button class="link-button" id="lsNameEdit" type="button">Edit</button>
+              </div>
+              <form class="acct-row-edit" id="lsNameForm" novalidate hidden>
+                <label class="sr-only" for="lsNameInput">Your name</label>
+                <input class="input" id="lsNameInput" maxlength="60" autocomplete="name">
+                <div class="acct-row-edit-actions">
+                  <button class="btn btn-gold btn-sm" type="submit">Save</button>
+                  <button class="btn btn-ghost btn-sm" id="lsNameCancel" type="button">Cancel</button>
+                </div>
+              </form>
+              <div class="acct-row">
+                <dt>Email</dt>
+                <dd id="lsEmail"></dd>
+                <span class="acct-tag" id="lsEmailTag" hidden>Verified</span>
+              </div>
+              <div class="acct-row">
+                <dt>Password</dt>
+                <dd id="lsPassword">••••••••</dd>
+                <button class="link-button" id="lsPasswordReset" type="button">Reset</button>
+              </div>
+              <div class="acct-row">
+                <dt>Sign-in methods</dt>
+                <dd id="lsMethods"></dd>
+              </div>
+            </dl>
+            <p class="form-note" id="lsNote" role="status" aria-live="polite"></p>
+          </section>
+
+          <aside class="panel" id="savedDetails" aria-labelledby="savedDetailsTitle">
+            <h2 id="savedDetailsTitle">Your Addresses</h2>
+            <p class="muted" id="profileStorageNote" style="font-size:13px;margin:-8px 0 18px">Used to fill in checkout faster. Stored only on this device until you sign in.</p>
+            <form id="profileForm" novalidate>
+              <div class="form-grid" style="grid-template-columns:1fr">
+                <div class="field"><label for="p-name">Full name</label><input class="input" id="p-name" name="name" autocomplete="name" aria-describedby="p-name-error"><span class="err-msg" id="p-name-error">Please enter at least 2 characters.</span></div>
+                <div class="field"><label for="p-phone">Mobile</label><input class="input" id="p-phone" name="phone" type="tel" inputmode="tel" autocomplete="tel" aria-describedby="p-phone-error"><span class="err-msg" id="p-phone-error">Please enter a valid mobile number.</span></div>
+                <div class="field"><label for="p-email">Email</label><input class="input" id="p-email" name="email" type="email" autocomplete="email" aria-describedby="p-email-error"><span class="err-msg" id="p-email-error">Please enter a valid email address.</span></div>
+                <div class="field"><label for="p-address1">Address</label><input class="input" id="p-address1" name="address1" autocomplete="address-line1" aria-describedby="p-address1-error"><span class="err-msg" id="p-address1-error">Please enter at least 4 characters.</span></div>
+                <div class="field"><label for="p-address2">Area, landmark</label><input class="input" id="p-address2" name="address2" autocomplete="address-line2"></div>
+                <div class="field"><label for="p-city">City</label><input class="input" id="p-city" name="city" autocomplete="address-level2" aria-describedby="p-city-error"><span class="err-msg" id="p-city-error">Please enter at least 2 characters.</span></div>
+                <div class="field"><label for="p-pincode">PIN code</label><input class="input" id="p-pincode" name="pincode" inputmode="numeric" maxlength="6" pattern="[1-9][0-9]{5}" autocomplete="postal-code" aria-describedby="p-pincode-error"><span class="err-msg" id="p-pincode-error">Please enter a valid 6-digit PIN code.</span></div>
+                <div class="field"><label for="p-state">State</label><input class="input" id="p-state" name="state" autocomplete="address-level1" aria-describedby="p-state-error"><span class="err-msg" id="p-state-error">Please enter a state.</span></div>
+              </div>
+              <button class="btn btn-gold btn-block" type="submit" style="margin-top:20px">Save Details</button>
+              <button class="btn btn-ghost btn-block btn-sm" type="button" id="clearData" style="margin-top:10px">Clear saved data</button>
+              <p class="form-note" id="profileNote" role="status" aria-live="polite"></p>
+            </form>
+          </aside>
+        </div>
       </div>
     </section>
   </main>

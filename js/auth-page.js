@@ -14,6 +14,8 @@
   const session = document.getElementById('authPageSession');
   const sessionUser = document.getElementById('authPageUser');
   const signOutButton = document.getElementById('authPageSignOut');
+  const googleWrap = document.getElementById('authGoogleWrap');
+  const googleButton = document.getElementById('googleSignIn');
   let firebaseApi = null;
   let busy = false;
 
@@ -45,6 +47,10 @@
     submitButton.classList.toggle('is-loading', value);
     if (resetButton) resetButton.disabled = value;
     if (signOutButton) signOutButton.disabled = value;
+    if (googleButton) {
+      googleButton.disabled = value;
+      googleButton.classList.toggle('is-loading', value);
+    }
   };
 
   const errorMessage = (error) => {
@@ -70,11 +76,24 @@
     return messages[code] || (code ? `Firebase sign-in failed (${code}). Check the Firebase Authentication settings.` : 'We could not complete that request. Please try again.');
   };
 
+  /* Returns '' when the person simply closed the Google window (nothing to report). */
+  const googleErrorMessage = (error) => {
+    const code = String(error && error.code || '');
+    if (code === 'auth/popup-closed-by-user' || code === 'auth/cancelled-popup-request') return '';
+    const messages = {
+      'auth/popup-blocked': 'Your browser blocked the Google sign-in window. Allow pop-ups for this site and try again.',
+      'auth/operation-not-allowed': 'Google sign-in is not enabled yet. Turn on Google under Authentication → Sign-in method in the Firebase console.',
+      'auth/account-exists-with-different-credential': 'An account already exists with this email using a different sign-in method. Sign in with your email and password instead.'
+    };
+    return messages[code] || errorMessage(error);
+  };
+
   const setFirebaseAvailability = (api) => {
     firebaseApi = api;
     const enabled = Boolean(api && api.enabled);
     form.querySelectorAll('input').forEach((input) => { input.disabled = !enabled; });
     submitButton.disabled = !enabled;
+    if (googleButton) googleButton.disabled = !enabled;
     if (resetButton) resetButton.disabled = !enabled;
     if (enabled) {
       setNote('');
@@ -88,6 +107,7 @@
   const renderAuthState = (user) => {
     const signedIn = Boolean(user);
     form.hidden = signedIn;
+    if (googleWrap) googleWrap.hidden = signedIn;
     session.hidden = !signedIn;
     document.querySelector('.auth-switch').hidden = signedIn;
     sessionUser.textContent = signedIn ? (user.email || 'Signed-in account') : '';
@@ -140,6 +160,32 @@
       }
     } catch (error) {
       setNote(errorMessage(error), 'err');
+    } finally {
+      setBusy(false);
+    }
+  });
+
+  if (googleButton) googleButton.addEventListener('click', async () => {
+    if (busy) return;
+    if (!firebaseApi || !firebaseApi.enabled) {
+      setNote('Firebase is not connected yet. Add your Firebase web app values in js/config.js to enable account access.');
+      return;
+    }
+    setBusy(true);
+    setNote('');
+    try {
+      await firebaseApi.ready;
+      const result = await firebaseApi.signInWithGoogle();
+      if (result.isNewUser) {
+        const user = result.user;
+        try { await firebaseApi.saveProfile(user.uid, { name: user.displayName || '', email: user.email || '' }); }
+        catch (error) { console.warn('Firebase profile save after Google sign-up failed.', error); }
+        EH.toast('Your EliteHub account is ready');
+      } else {
+        EH.toast('Welcome back to EliteHub');
+      }
+    } catch (error) {
+      setNote(googleErrorMessage(error), 'err');
     } finally {
       setBusy(false);
     }
