@@ -27,7 +27,7 @@ window.EH_CONFIG = {
      Keep these values in sync with the EliteHub Web app in Firebase Console.
      Firebase Authentication stores passwords securely; this site never stores them. */
   firebase: {
-    apiKey:"AIzaSyD8KIvL---5jhf8Xlpon6RPlVCPB50gnyk",
+    apiKey: "AIzaSyCRdhP4T8K_edOxAnNOIasHLz9kkRzjOUA",
     authDomain: "elitehub-f33fd.firebaseapp.com",
     projectId: "elitehub-f33fd",
     storageBucket: "elitehub-f33fd.firebasestorage.app",
