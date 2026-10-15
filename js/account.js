@@ -56,6 +56,7 @@
     let allOrders = [];
     let visibleOrders = [];
     let orderFilter = 'all';
+    let authResolved = false;
     const openOrderDetails = new Set();
     const orderFilters = {
       all: () => true,
@@ -145,7 +146,21 @@
       }).join('')}</ol>`;
     }
 
+    /* Orders belong to an account: nothing is listed until someone is signed in,
+       even though a copy of recent orders is cached in this browser. */
+    function renderSignedOutOrders() {
+      allOrders = [];
+      visibleOrders = [];
+      openOrderDetails.clear();
+      if (orderTabs) orderTabs.hidden = true;
+      if (orderCount) orderCount.textContent = '';
+      box.innerHTML = authResolved
+        ? `<div class="empty-state">${EH.icon('lock')}<h3>Sign in to view your orders</h3><p>Your order history is private to your account. Sign in to see your orders and track them.</p><a class="btn btn-gold btn-sm" href="#authPanel">Sign in ${EH.icon('arrow', 'ico-arrow')}</a></div>`
+        : `<div class="panel">Loading your orders…</div>`;
+    }
+
     function renderOrders(orders = readOrders()) {
+      if (!authUser) { renderSignedOutOrders(); return; }
       allOrders = orders;
       const matches = orderFilters[orderFilter] || orderFilters.all;
       visibleOrders = orders.filter((order) => matches(String(order.status || 'Placed')));
@@ -409,7 +424,7 @@
       form.reset();
       Object.keys(rules).forEach((name) => validateField(name));
       setNote(profileNote, cloudError ? 'Local data cleared, but the cloud profile could not be cleared.' : '', cloudError ? 'err' : '');
-      renderOrders();
+      renderOrders(authUser ? allOrders : []);
       EH.toast(cloudError ? 'Local saved data cleared.' : 'Saved data cleared', cloudError ? { type: 'error' } : undefined);
     });
 
@@ -640,11 +655,13 @@
       firebaseApi = api;
       setFirebaseAvailability(api);
       if (!api.enabled) {
+        authResolved = true;
         renderAuthState(null);
         renderOrders();
         return;
       }
       api.subscribeAuth((user) => {
+        authResolved = true;
         renderAuthState(user);
         if (user) {
           syncRemoteProfile(user);
@@ -827,8 +844,6 @@
     setAuthMode('login');
     document.addEventListener('firebase:ready', (e) => setupFirebase(e.detail && e.detail.api ? e.detail.api : window.EHFirebase));
     if (window.EHFirebase) setupFirebase(window.EHFirebase);
-
-    window.addEventListener('storage', (e) => { if (e.key === orderKey && !authUser) renderOrders(); });
 
     renderOrders();
   });

@@ -1217,7 +1217,7 @@ body[data-page="customize"] .site-header .header-inner { justify-content:space-b
    Account hub (Amazon-style) + Google sign-in
    ===================================================================== */
 .account-access { padding-top: 32px; }
-#ordersSection, #loginSecurity, #savedDetails { scroll-margin-top: calc(var(--header-h) + 20px); }
+#ordersSection, #loginSecurity, #savedDetails, #authPanel { scroll-margin-top: calc(var(--header-h) + 20px); }
 .acct-lower { padding-top: 24px; }
 
 /* profile card */
