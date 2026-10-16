@@ -9,7 +9,9 @@
     const form = $('#checkoutForm');
     const accountGate = $('#checkoutAccountGate');
     const accountError = $('#checkoutAccountError');
+    const orderStatus = $('#checkoutOrderStatus');
     let coupon = '';
+    let placingOrder = false;
     try { coupon = sessionStorage.getItem('eh_coupon') || ''; } catch (e) { /* ignore */ }
     let firebaseApi = null;
     let firebaseUser = null;
@@ -188,51 +190,64 @@
     /* place order */
     form.addEventListener('submit', async (e) => {
       e.preventDefault();
+      if (placingOrder) return;
+      placingOrder = true;
+      const btn = $('#placeOrder');
       const whatsappWindow = payment === 'whatsapp' ? window.open('about:blank', '_blank') : null;
+      const setStatus = (message, kind = '') => {
+        if (!orderStatus) return;
+        orderStatus.textContent = message;
+        orderStatus.className = `form-note${kind ? ` ${kind}` : ''}`;
+      };
+      btn.disabled = true;
+      btn.setAttribute('aria-busy', 'true');
+      btn.classList.add('is-loading');
+      btn.textContent = 'Connecting…';
+      setStatus('Connecting to secure order storage. Please wait.');
       try {
         if (!firebaseApi || !firebaseApi.enabled) throw new Error('Order storage is unavailable. Please try again later.');
         await firebaseApi.ready;
-      } catch (error) {
-        if (whatsappWindow) whatsappWindow.close();
-        accountGate.hidden = false;
-        accountError.textContent = error.message;
-        EH.toast(error.message, { type: 'error', duration: 4500 });
-        return;
-      }
-      const orderUser = firebaseApi.currentUser || firebaseUser;
-      if (!orderUser) {
-        if (whatsappWindow) whatsappWindow.close();
-        accountGate.hidden = false;
-        accountError.textContent = 'Sign in or create an account before placing an order.';
-        accountGate.scrollIntoView({ block: 'center', behavior: 'smooth' });
-        return;
-      }
-      accountGate.hidden = true;
-      accountError.textContent = '';
-      const bad = Object.keys(rules).filter((n) => !check(n));
-      if (bad.length) {
-        if (whatsappWindow) whatsappWindow.close();
-        form.elements[bad[0]].focus();
-        form.elements[bad[0]].scrollIntoView({ block: 'center', behavior: 'smooth' });
-        EH.toast('Please check the highlighted fields', { type: 'error' });
-        return;
-      }
-      const items = EH.cart.items();
-      if (!items.length) {
-        if (whatsappWindow) whatsappWindow.close();
-        return;
-      }
-      const f = form.elements;
-      const customer = { name: f.name.value.trim(), phone: f.phone.value.trim(), email: f.email.value.trim(), address1: f.address1.value.trim(), address2: f.address2.value.trim(), city: f.city.value.trim(), state: f.state.value, pincode: f.pincode.value.trim(), notes: f.notes.value.trim() };
-      if ($('#f-save').checked) { const p = Object.assign({}, customer); delete p.notes; EH.store.set('eh_profile', p); }
-      const order = { id: EH.orderId(), date: new Date().toISOString(), customer, items, totals: EH.totals(items, coupon, payment), payment, status: payment === 'online' ? 'Payment pending' : 'Placed' };
+        const orderUser = firebaseApi.currentUser || firebaseUser;
+        if (!orderUser) {
+          accountGate.hidden = false;
+          accountError.textContent = 'Sign in or create an account before placing an order.';
+          accountGate.scrollIntoView({ block: 'center', behavior: 'smooth' });
+          setStatus('Please sign in, then return here to place your order.', 'err');
+          if (whatsappWindow) whatsappWindow.close();
+          return;
+        }
+        accountGate.hidden = true;
+        accountError.textContent = '';
+        const bad = Object.keys(rules).filter((n) => !check(n));
+        if (bad.length) {
+          form.elements[bad[0]].focus();
+          form.elements[bad[0]].scrollIntoView({ block: 'center', behavior: 'smooth' });
+          setStatus('Complete the highlighted required fields to continue.', 'err');
+          EH.toast('Please check the highlighted fields', { type: 'error' });
+          if (whatsappWindow) whatsappWindow.close();
+          return;
+        }
+        const items = EH.cart.items();
+        if (!items.length) {
+          setStatus('Your bag is empty. Add an item before placing an order.', 'err');
+          if (whatsappWindow) whatsappWindow.close();
+          renderSummary();
+          return;
+        }
+        const f = form.elements;
+        const customer = { name: f.name.value.trim(), phone: f.phone.value.trim(), email: f.email.value.trim(), address1: f.address1.value.trim(), address2: f.address2.value.trim(), city: f.city.value.trim(), state: f.state.value, pincode: f.pincode.value.trim(), notes: f.notes.value.trim() };
+        if ($('#f-save').checked) { const p = Object.assign({}, customer); delete p.notes; EH.store.set('eh_profile', p); }
+        const order = { id: EH.orderId(), date: new Date().toISOString(), customer, items, totals: EH.totals(items, coupon, payment), payment, status: payment === 'online' ? 'Payment pending' : 'Placed' };
 
-      if (payment === 'online') {
-        const btn = $('#placeOrder');
-        btn.classList.add('is-loading');
-        try {
-          await savePurchasedCustomizations(firebaseApi, orderUser, order);
-          await firebaseApi.saveOrder(orderUser.uid, order);
+        btn.textContent = items.some((item) => item.custom3d) ? 'Saving design and order…' : 'Saving your order…';
+        setStatus(items.some((item) => item.custom3d)
+          ? 'Uploading your custom 3D files and saving the order. Keep this page open.'
+          : 'Saving your order. Please keep this page open.');
+        await savePurchasedCustomizations(firebaseApi, orderUser, order);
+        await firebaseApi.saveOrder(orderUser.uid, order);
+        if (payment === 'online') {
+          btn.textContent = 'Opening secure payment…';
+          setStatus('Your order and design files are saved. Complete payment in the secure window.');
           order.paymentId = await payOnline(order);
           order.status = 'Paid';
           try {
@@ -242,34 +257,35 @@
             EH.toast('Payment succeeded, but the order update could not sync. Please contact us with your order number.', { type: 'error', duration: 6000 });
           }
           finalize(order);
-        } catch (err) {
-          if (err.message !== 'Payment was cancelled — your bag is still saved.') console.warn('Order could not be saved or paid.', err);
-          EH.toast(err.message, { type: 'error', duration: 4500 });
+          return;
         }
-        btn.classList.remove('is-loading');
-        return;
-      }
-      try {
-        await savePurchasedCustomizations(firebaseApi, orderUser, order);
-        await firebaseApi.saveOrder(orderUser.uid, order);
+
+        if (payment === 'whatsapp') {
+          if (whatsappWindow) {
+            whatsappWindow.opener = null;
+            whatsappWindow.location.href = EH.waLink(EH.orderText(order));
+          } else {
+            EH.toast('Order saved. Allow pop-ups to open WhatsApp and send the order details.', { type: 'error', duration: 5000 });
+          }
+        }
+        finalize(order);
       } catch (error) {
         if (whatsappWindow) whatsappWindow.close();
-        console.error('Order could not be saved to Firebase.', error);
+        if (error.message !== 'Payment was cancelled — your bag is still saved.') console.error('Order could not be placed.', error);
         const message = ['storage/unauthorized', 'permission-denied', 'firestore/permission-denied'].includes(error?.code)
-          ? 'Your order was not placed because the store could not save its 3D files. Please contact us so we can fix the upload settings.'
+          ? 'The store could not save your order or its 3D files. Please contact us so we can fix the upload settings.'
           : (error?.message || 'Your order could not be saved. Please try again.');
+        setStatus(message, 'err');
         EH.toast(message, { type: 'error', duration: 6500 });
-        return;
-      }
-      if (payment === 'whatsapp') {
-        if (whatsappWindow) {
-          whatsappWindow.opener = null;
-          whatsappWindow.location.href = EH.waLink(EH.orderText(order));
-        } else {
-          EH.toast('Order saved. Allow pop-ups to open WhatsApp and send the order details.', { type: 'error', duration: 5000 });
+      } finally {
+        placingOrder = false;
+        if (btn.isConnected) {
+          btn.disabled = false;
+          btn.removeAttribute('aria-busy');
+          btn.classList.remove('is-loading');
+          if (document.getElementById('checkoutForm')) renderSummary();
         }
       }
-      finalize(order);
     });
 
     function showTrackingDialog(order) {
