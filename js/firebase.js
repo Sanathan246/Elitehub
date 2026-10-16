@@ -58,7 +58,7 @@
       const items = Array.isArray(order.items) ? order.items.map((item = {}) => {
         /* Images and local-only IDs stay in localStorage/IndexedDB. Keeping them
            out of Firestore prevents large custom previews from hitting the doc limit. */
-        const { image, key, lineId, ...cloudItem } = item;
+        const { image, key, lineId, sourceModelKey, ...cloudItem } = item;
         return cloudItem;
       }) : [];
       return {
@@ -213,6 +213,20 @@
           details: ['details.json', 'application/json'],
           preview: ['preview.png', 'image/png']
         };
+        const sourceModelName = String(metadata.sourceModelName || '').trim().slice(0, 160);
+        if (sourceModelName) {
+          const ext = (sourceModelName.split('.').pop() || '').toLowerCase();
+          const sourceSpecs = {
+            glb: ['source-model.glb', 'model/gltf-binary'],
+            gltf: ['source-model.gltf', 'model/gltf+json'],
+            obj: ['source-model.obj', 'application/octet-stream'],
+            stl: ['source-model.stl', 'application/octet-stream'],
+            fbx: ['source-model.fbx', 'application/octet-stream']
+          };
+          if (!sourceSpecs[ext]) throw new Error('The original 3D file type is not supported.');
+          if (!(assets.sourceModel instanceof Blob) || !assets.sourceModel.size) throw new Error('The original uploaded 3D file could not be prepared.');
+          specs.sourceModel = sourceSpecs[ext];
+        }
         const paths = {};
         await Promise.all(Object.entries(specs).map(async ([key, [filename, contentType]]) => {
           const blob = assets[key];
@@ -241,6 +255,7 @@
           summary: String(metadata.summary || '').slice(0, 1000),
           previewId: String(metadata.previewId || '').slice(0, 120),
           orderId: String(metadata.orderId || '').slice(0, 120),
+          sourceModelName,
           assets: paths,
           updatedAt: firestoreModule.serverTimestamp()
         };
@@ -251,16 +266,29 @@
         return paths;
       },
       async getCustomization(uid, id) {
-        if (!uid || !auth.currentUser || auth.currentUser.uid !== uid) throw new Error('Sign in to open this saved mockup.');
+        const current = auth.currentUser;
+        const adminEmail = String(window.EH_CONFIG?.adminEmail || '').trim().toLowerCase();
+        const isOwner = !!current && current.uid === uid;
+        const isAdmin = !!current && current.emailVerified && adminEmail
+          && String(current.email || '').trim().toLowerCase() === adminEmail;
+        if (!uid || (!isOwner && !isAdmin)) throw new Error('Sign in to open this saved mockup.');
         const snapshot = await firestoreModule.getDoc(firestoreModule.doc(db, 'users', uid, 'customizations', String(id || '')));
         return snapshot.exists() ? Object.assign({ id: snapshot.id }, snapshot.data()) : null;
       },
       async downloadCustomizationAsset(uid, path) {
-        if (!uid || !auth.currentUser || auth.currentUser.uid !== uid) throw new Error('Sign in to download this 3D mockup.');
+        const current = auth.currentUser;
+        const adminEmail = String(window.EH_CONFIG?.adminEmail || '').trim().toLowerCase();
+        const isOwner = !!current && current.uid === uid;
+        const isAdmin = !!current && current.emailVerified && adminEmail
+          && String(current.email || '').trim().toLowerCase() === adminEmail;
+        if (!uid || (!isOwner && !isAdmin)) throw new Error('Sign in to download this 3D mockup.');
         const assetPath = String(path || '');
         if (!assetPath.startsWith(`users/${uid}/customizations/`)) throw new Error('This mockup file does not belong to your account.');
         const bytes = await storageModule.getBytes(storageModule.ref(storage, assetPath), 100 * 1024 * 1024);
-        const type = assetPath.endsWith('.glb') ? 'model/gltf-binary' : assetPath.endsWith('.json') ? 'application/json' : 'image/png';
+        const type = assetPath.endsWith('.glb') ? 'model/gltf-binary'
+          : assetPath.endsWith('.gltf') ? 'model/gltf+json'
+            : assetPath.endsWith('.json') ? 'application/json'
+              : assetPath.endsWith('.png') ? 'image/png' : 'application/octet-stream';
         return new Blob([bytes], { type });
       }
     };

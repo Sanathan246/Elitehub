@@ -549,10 +549,12 @@ export async function loadModelFile(blob, fileName) {
     if (!o.isMesh) return;
     if (o.isSkinnedMesh) o.frustumCulled = false;
     const g = o.geometry;
-    if (!g.attributes.normal) g.computeVertexNormals();
+    const normal = g.attributes.normal;
+    if (!normal || normal.count !== g.attributes.position.count || !normal.array.every(Number.isFinite)) g.computeVertexNormals();
     tris += (g.index ? g.index.count : g.attributes.position.count) / 3;
     o.castShadow = true;
-    o.receiveShadow = true;
+    /* Imported dense meshes can self-shadow with acne; keep their floor shadow only. */
+    o.receiveShadow = false;
     originals.set(o, o.material);
     targets.push(o);
   });

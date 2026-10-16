@@ -36,6 +36,8 @@ const S = {
   designLayout: 'front',
   size: null,
   model: null,
+  orderType: null,
+  orderColor: null,
   qty: 1,
   dirty: false,
   loading: false,
@@ -203,6 +205,9 @@ async function openSaved(rec) {
   S.cloudPaths = rec.cloudPaths || null;
   S.cloudSynced = !!rec.cloudSynced;
   S.cloudOwnerUid = rec.cloudOwnerUid || null;
+  S.orderType = rec.orderType || null;
+  S.orderColor = rec.orderColor || null;
+  resetOptions();
   S.dirty = false;
   renderAll();
 }
@@ -352,12 +357,13 @@ function renderAll() {
 const kind = () => (studio.model?.kind === 'upload' ? 'upload' : studio.model?.template || 'tee');
 const tpl = () => templateById(kind());
 /** EliteHub product type this can be ordered as (js/mockups.js), or null for preview-only. */
-const shopType = () => tpl()?.shop || null;
+const shopType = () => kind() === 'upload' ? (EH.types[S.orderType] ? S.orderType : null) : (tpl()?.shop || null);
 /** Which EliteHub palette the colour swatches come from. */
 const paletteType = () => shopType() || (tpl()?.garment ? 'tshirt' : null);
 const catalogueColorId = () => {
   const type = paletteType();
   if (!type) return null;
+  if (kind() === 'upload') return EH.types[type].colors.includes(S.orderColor) ? S.orderColor : null;
   const hex = String(studio.appearance.color || '').toLowerCase();
   return EH.types[type].colors.find((c) => EH.colors[c].hex.toLowerCase() === hex) || null;
 };
@@ -373,7 +379,7 @@ function resetOptions() {
     const savedModel = studio.model?.params?.phoneModel;
     const requestedModel = params.has('id') ? savedModel : (params.get('model') || savedModel);
     S.model = EH.types.phonecase.models.includes(requestedModel) ? requestedModel : (d.model || EH.types.phonecase.models[0]);
-    if (studio.model?.params?.phoneModel !== S.model) studio.setParams({ phoneModel: S.model });
+    if (kind() !== 'upload' && studio.model?.params?.phoneModel !== S.model) studio.setParams({ phoneModel: S.model });
   }
 }
 
@@ -441,6 +447,12 @@ function renderProduct() {
     ? `Your 3D file. ${Number(m.stats?.triangles || 0).toLocaleString('en-IN')} triangles`
     : TEMPLATES.find((t) => t.id === k)?.note;
   let options = '';
+  if (k === 'upload') {
+    options += `<div class="field"><label for="orderType">Order this design as</label><select class="select" id="orderType" data-order-type>
+      <option value="">Choose a store product</option>
+      ${Object.entries(EH.types).map(([id, product]) => `<option value="${esc(id)}" ${id === S.orderType ? 'selected' : ''}>${esc(product.label)} - ${EH.money(product.basePrice)}</option>`).join('')}
+    </select><p class="p3d-note">Your design uses the current store price for the selected product.</p></div>`;
+  }
   const type = shopType();
   const T = type ? EH.types[type] : null;
   if (T?.sizes) {
@@ -456,7 +468,7 @@ function renderProduct() {
   } else if (tpl()?.garment && !type) {
     options += `<p class="p3d-note">Preview only for now: this style isn't in the EliteHub shop yet. You can still design it, save it and download images.</p>`;
   } else if (k === 'upload') {
-    options = `<button class="btn btn-ghost btn-sm" type="button" data-act="replace">${icon('upload')} Replace file</button>
+    options += `<button class="btn btn-ghost btn-sm" type="button" data-act="replace">${icon('upload')} Replace file</button>
       <p class="p3d-note">Textures must be inside the file. If your model looks grey, export it as .glb with textures embedded.</p>`;
   }
 
@@ -479,11 +491,13 @@ function renderProduct() {
       <strong>Upload a 3D file</strong>
       <span>GLB, GLTF, OBJ, STL or FBX, up to ${MAX_UPLOAD_MB} MB</span>
     </button>
-    <p class="p3d-note">Your file stays on this device unless you save it to your account's 3D previews.</p>`;
+    <p class="p3d-note">Your original file is included with your order. Save the preview to your account to sync it across devices.</p>`;
 
   el.onclick = async (e) => {
     const t = e.target.closest('[data-template]');
     if (t && t.dataset.template !== kind()) {
+      S.orderType = null;
+      S.orderColor = null;
       await withLoading('Loading model', () => studio.loadTemplate(t.dataset.template));
       markDirty();
       return;
@@ -495,7 +509,19 @@ function renderProduct() {
     if (act === 'upload' || act === 'replace') $('#modelInput').click();
   };
   el.onchange = (e) => {
-    if (e.target.matches('[data-phone-model]')) { S.model = e.target.value; studio.setParams({ phoneModel: S.model }); markDirty(); }
+    if (e.target.matches('[data-order-type]')) {
+      S.orderType = EH.types[e.target.value] ? e.target.value : null;
+      S.orderColor = S.orderType ? (EH.types[S.orderType].colors[0] || null) : null;
+      resetOptions();
+      renderAll();
+      markDirty();
+      return;
+    }
+    if (e.target.matches('[data-phone-model]')) {
+      S.model = e.target.value;
+      if (kind() !== 'upload') studio.setParams({ phoneModel: S.model });
+      markDirty();
+    }
   };
 }
 
@@ -727,7 +753,12 @@ function renderFinish() {
   const apply = (patch) => { studio.setAppearance({ ...studio.appearance, ...patch }); renderFinish(); renderProduct(); renderActions(); markDirty(); };
   el.onclick = (e) => {
     const sw = e.target.closest('[data-hex]');
-    if (sw) return apply({ color: sw.dataset.hex });
+    if (sw) {
+      if (kind() === 'upload') {
+        S.orderColor = EH.types[shopType()]?.colors.find((c) => EH.colors[c].hex.toLowerCase() === sw.dataset.hex.toLowerCase()) || S.orderColor;
+      }
+      return apply({ color: sw.dataset.hex });
+    }
     const f = e.target.closest('[data-finish]');
     if (f) return apply({ finish: f.dataset.finish });
     const ov = e.target.closest('[data-override]');
@@ -864,11 +895,12 @@ function customizationDetails(id, order = null) {
     previewId: S.previewId,
     orderId: order?.id || null,
     name: S.name,
-    product: productLabel(),
+    product: type ? EH.types[type].label : productLabel(),
     kind: kind(),
     productType: type,
+    sourceModelName: kind() === 'upload' ? (studio.model?.fileName || '') : '',
     color: colorId ? EH.colors[colorId].name : 'Custom',
-    colorHex: studio.appearance.color || '',
+    colorHex: kind() === 'upload' && colorId ? EH.colors[colorId].hex : (studio.appearance.color || ''),
     finish: studio.appearance.finish || '',
     size: type && EH.types[type]?.sizes ? S.size || '' : '',
     model: type && EH.types[type]?.models ? S.model || '' : '',
@@ -889,6 +921,7 @@ function glbMetadata(details) {
     finish: details.finish,
     size: details.size,
     model: details.model,
+    sourceModelName: details.sourceModelName,
     quantity: details.quantity,
     unitPrice: details.unitPrice,
     summary: details.summary,
@@ -1016,6 +1049,8 @@ async function doSave() {
       folderId: S.folderId,
       product: productLabel(),
       kind: kind(),
+      orderType: S.orderType,
+      orderColor: S.orderColor,
       thumbnail,
       state: studio.getState(),
       file: studio.fileBlob || null,
@@ -1066,6 +1101,7 @@ async function createCustomizationAssets(id, order = null) {
     details: new Blob([JSON.stringify(details, null, 2)], { type: 'application/json' }),
     preview,
   };
+  if (details.sourceModelName && studio.fileBlob) files.sourceModel = studio.fileBlob;
   return {
     files,
     metadata: {
@@ -1083,12 +1119,23 @@ async function createCustomizationAssets(id, order = null) {
       summary: details.summary,
       previewId: details.previewId || '',
       orderId: details.orderId || '',
+      sourceModelName: details.sourceModelName || '',
     },
   };
 }
 
 async function addToBag() {
   const type = shopType();
+  if (!type || !EH.types[type]) {
+    setTab('product');
+    EH.toast('Choose a store product for your uploaded model first.', { type: 'error' });
+    return;
+  }
+  if (!catalogueColorId()) {
+    setTab('finish');
+    EH.toast('Choose a store colour for this order first.', { type: 'error' });
+    return;
+  }
   const T = EH.types[type];
   if (T.sizes && !S.size && needsSizeChoice()) {
     setTab('product');
@@ -1102,7 +1149,9 @@ async function addToBag() {
   try {
     const customId = EH.uid();
     const image = await studio.thumbnail(512);
-    const name = S.name !== DEFAULT_NAME ? S.name : T.label;
+    const name = kind() === 'upload'
+      ? `${T.label} - ${S.name !== DEFAULT_NAME ? S.name : productLabel()}`
+      : (S.name !== DEFAULT_NAME ? S.name : T.label);
     const details = customizationDetails(customId);
     details.name = name;
     const [mockup, preview] = await Promise.all([
@@ -1110,14 +1159,18 @@ async function addToBag() {
       studio.capture({ width: 1024, height: 1024, type: 'image/png' }),
     ]);
     if (!image || !preview) throw new Error('The product preview could not be prepared. Please try again.');
+    const sourceModelKey = kind() === 'upload' && studio.fileBlob ? `sourceModel:${customId}` : '';
     const filesSaved = await Promise.all([
       EH.files.put(`mockup:${customId}`, mockup),
       EH.files.put(`details:${customId}`, new Blob([JSON.stringify(details, null, 2)], { type: 'application/json' })),
       EH.files.put(`previewBlob:${customId}`, preview),
+      ...(sourceModelKey ? [EH.files.put(sourceModelKey, studio.fileBlob)] : []),
     ]);
     if (filesSaved.some((saved) => !saved)) throw new Error('The 3D mockup could not be saved in this browser. Check available storage and try again.');
     const ok = EH.cart.add({
       custom: true, custom3d: true, customId, previewId: S.previewId || '', name, type, color: catalogueColorId(), size: T.sizes ? S.size : undefined, model: T.models ? S.model : undefined,
+      sourceModelKey: sourceModelKey || undefined,
+      sourceModelName: sourceModelKey ? (studio.model?.fileName || '') : '',
       qty: S.qty, price: T.basePrice + EH.sizeAdd(type, S.size), image, summary: details.summary,
     });
     if (!ok) return;
@@ -1184,6 +1237,8 @@ function resetPreview() {
   S.name = DEFAULT_NAME;
   S.folderId = null;
   S.size = null;
+  S.orderType = null;
+  S.orderColor = null;
   S.qty = 1;
   history.replaceState(null, '', location.pathname);
 }

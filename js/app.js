@@ -663,23 +663,30 @@
     if (typeof data !== 'string') setTimeout(() => URL.revokeObjectURL(url), 2000);
   };
 
-  /** Download a stored custom-design file, falling back to the signed-in user's Firebase copy. */
-  EH.downloadDesign = async (customId, kind = 'print', filename) => {
+  /** Download a stored custom-design file, falling back to Firebase when the local copy is unavailable. */
+  EH.downloadDesign = async (customId, kind = 'print', filename, ownerUid = '') => {
     try {
       let data = await EH.files.get(kind + ':' + customId);
-      if (!data && ['mockup', 'details', 'preview', 'previewBlob'].includes(kind) && window.EHFirebase?.enabled) {
+      let record = null;
+      if (!data && ['mockup', 'details', 'preview', 'previewBlob', 'sourceModel'].includes(kind) && window.EHFirebase?.enabled) {
         const api = window.EHFirebase;
         await api.ready;
-        const user = api.currentUser;
-        if (user) {
-          const record = await api.getCustomization(user.uid, customId);
-          const path = record?.assets?.[kind === 'previewBlob' || kind === 'preview' ? 'preview' : kind];
-          if (path) data = await api.downloadCustomizationAsset(user.uid, path);
+        const uid = ownerUid || api.currentUser?.uid;
+        if (uid) {
+          record = await api.getCustomization(uid, customId);
+          const asset = kind === 'previewBlob' || kind === 'preview' ? 'preview' : kind;
+          const path = record?.assets?.[asset];
+          if (path) data = await api.downloadCustomizationAsset(uid, path);
         }
       }
       if (!data) { EH.toast('That design file is no longer stored on this device or account.', { type: 'error' }); return; }
-      const extension = { mockup: 'glb', details: 'json', preview: 'png', previewBlob: 'png' }[kind] || 'png';
-      EH.download(data, filename || `elitehub-design-${customId}-${kind}.${extension}`);
+      const extension = kind === 'sourceModel'
+        ? ((record?.sourceModelName || filename || '').split('.').pop() || 'glb').toLowerCase()
+        : ({ mockup: 'glb', details: 'json', preview: 'png', previewBlob: 'png' }[kind] || 'png');
+      const requestedName = filename || (kind === 'sourceModel' ? record?.sourceModelName : '');
+      const downloadName = String(requestedName || `elitehub-design-${customId}-${kind}.${extension}`)
+        .replace(/[\\/:*?"<>|]/g, '_').replace(/\.{2,}/g, '_').slice(0, 160);
+      EH.download(data, downloadName);
     } catch (error) {
       console.error('Design file could not be downloaded.', error);
       EH.toast(error.message || 'That design file could not be downloaded.', { type: 'error' });
@@ -690,10 +697,14 @@
     const qty = clampQty(it.qty);
     const name = EH.esc(it.name || 'Item');
     const customId = it.customId ? EH.esc(String(it.customId)) : '';
+    const ownerUid = EH.esc(String(it.customizationOwnerUid || ''));
+    const sourceModelName = String(it.sourceModelName || '');
+    const sourceExtension = ((sourceModelName.match(/\.([a-z0-9]+)$/i) || [])[1] || '3d').toUpperCase();
+    const ownerAttribute = ownerUid ? ` data-owner-uid="${ownerUid}"` : '';
     return `<div class="sum-item">
       <div class="cart-thumb">${EH.thumbHTML(it)}<span class="q">${qty}</span></div>
       <div><h4>${name}${it.custom ? '<span class="tag-custom">Custom</span>' : ''}</h4><div class="meta">${EH.esc(EH.optionMeta(it))}</div>
-        ${withFiles && it.custom && customId ? `<div style="display:flex;gap:12px;margin-top:6px;flex-wrap:wrap"><button type="button" class="link-arrow" data-dl-design="${customId}" data-kind="print" data-file="${customId}-print-file.png" style="font-size:12px;color:var(--gold)">${EH.icon('download')} Print file</button><button type="button" class="link-arrow" data-dl-design="${customId}" data-kind="preview" data-file="${customId}-preview.png" style="font-size:12px">${EH.icon('download')} Preview</button>${it.custom3d ? `<button type="button" class="link-arrow" data-dl-design="${customId}" data-kind="mockup" data-file="${customId}-mockup.glb" style="font-size:12px">${EH.icon('download')} 3D mockup (.GLB)</button><button type="button" class="link-arrow" data-dl-design="${customId}" data-kind="details" data-file="${customId}-details.json" style="font-size:12px">${EH.icon('download')} Design details (.JSON)</button>` : ''}</div>` : ''}</div>
+        ${withFiles && it.custom && customId ? `<div style="display:flex;gap:12px;margin-top:6px;flex-wrap:wrap"><button type="button" class="link-arrow" data-dl-design="${customId}" data-kind="print" data-file="${customId}-print-file.png"${ownerAttribute} style="font-size:12px;color:var(--gold)">${EH.icon('download')} Print file</button><button type="button" class="link-arrow" data-dl-design="${customId}" data-kind="preview" data-file="${customId}-preview.png"${ownerAttribute} style="font-size:12px">${EH.icon('download')} Preview</button>${it.custom3d ? `<button type="button" class="link-arrow" data-dl-design="${customId}" data-kind="mockup" data-file="${customId}-mockup.glb"${ownerAttribute} style="font-size:12px">${EH.icon('download')} 3D mockup (.GLB)</button><button type="button" class="link-arrow" data-dl-design="${customId}" data-kind="details" data-file="${customId}-details.json"${ownerAttribute} style="font-size:12px">${EH.icon('download')} Design details (.JSON)</button>${sourceModelName ? `<button type="button" class="link-arrow" data-dl-design="${customId}" data-kind="sourceModel" data-file="${EH.esc(sourceModelName)}"${ownerAttribute} style="font-size:12px">${EH.icon('download')} Original uploaded model (.${EH.esc(sourceExtension)})</button>` : ''}` : ''}</div>` : ''}</div>
       <div class="price" style="font-size:13.5px;font-weight:600">${EH.money((Number(it.price) || 0) * qty)}</div>
     </div>`;
   }).join('');
@@ -808,7 +819,7 @@
         btn.innerHTML = EH.icon(open ? 'x' : 'menu');
       }
       const dl = t.closest('[data-dl-design]');
-      if (dl) EH.downloadDesign(dl.dataset.dlDesign, dl.dataset.kind || 'print', dl.dataset.file);
+      if (dl) EH.downloadDesign(dl.dataset.dlDesign, dl.dataset.kind || 'print', dl.dataset.file, dl.dataset.ownerUid || '');
       const acc = t.closest('.acc-head');
       if (acc) { const item = acc.parentElement; item.classList.toggle('open'); acc.setAttribute('aria-expanded', item.classList.contains('open')); }
     });

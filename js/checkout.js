@@ -132,10 +132,12 @@
     async function savePurchasedCustomizations(api, user, order) {
       const items = order.items.filter((item) => item.custom3d);
       for (const item of items) {
-        const [mockup, detailsFile, preview] = await Promise.all([
+        item.customizationOwnerUid = user.uid;
+        const [mockup, detailsFile, preview, sourceModel] = await Promise.all([
           EH.files.get(`mockup:${item.customId}`),
           EH.files.get(`details:${item.customId}`),
           EH.files.get(`previewBlob:${item.customId}`),
+          item.sourceModelName ? EH.files.get(item.sourceModelKey || `sourceModel:${item.customId}`) : Promise.resolve(null),
         ]);
         if (!(mockup instanceof Blob) || !(detailsFile instanceof Blob) || !(preview instanceof Blob)) {
           throw new Error(`The 3D mockup files for ${item.name || 'your custom product'} are missing from this browser. Reopen the 3D studio and add the design to your bag again.`);
@@ -145,6 +147,9 @@
           details = JSON.parse(await detailsFile.text());
         } catch (error) {
           throw new Error(`The design details for ${item.name || 'your custom product'} could not be read. Reopen the 3D studio and add it to your bag again.`);
+        }
+        if (item.sourceModelName && !(sourceModel instanceof Blob)) {
+          throw new Error('The original 3D file for ' + (item.name || 'your custom product') + ' is missing from this browser. Reopen the saved preview and add it to your bag again.');
         }
         const purchasedDetails = new Blob([JSON.stringify({
           ...details,
@@ -175,7 +180,8 @@
           summary: item.summary || '',
           previewId: item.previewId || '',
           orderId: order.id,
-        }, { mockup, details: purchasedDetails, preview });
+          sourceModelName: item.sourceModelName || '',
+        }, { mockup, details: purchasedDetails, preview, sourceModel });
       }
     }
 

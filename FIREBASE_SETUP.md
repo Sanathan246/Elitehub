@@ -13,6 +13,8 @@ The site uses Firebase Authentication and Cloud Firestore for account data. Cust
 
 If a custom domain is connected to Firebase Hosting later, add that domain under **Authentication → Settings → Authorized domains**.
 
+- Firebase Storage rules are defined in storage.rules. Apply them with firebase deploy --only storage before accepting original uploaded model files.
+
 ## Sign-in troubleshooting
 
 If sign-in reports `auth/api-key-not-valid`, copy the complete web app configuration again from **Project settings → General → Your apps** into `js/config.js`. Check that the API key is active and that its API restrictions allow Firebase Authentication (Identity Toolkit). Do not replace it with a guessed key.
@@ -52,7 +54,7 @@ firebase deploy --only firestore:rules
 - Dedicated sign-in and account creation screens are available at `login.html` and `signup.html`.
 - Saved delivery details are stored in `users/{uid}`.
 - Orders are stored in `users/{uid}/orders/{orderId}` and loaded into My Orders on another device.
-- Signed-in 3D previews and purchased 3D customizations are stored in `users/{uid}/customizations/{id}`. Firebase Storage holds the `.glb` mockup, `.json` design/order details and `.png` preview; the Firestore document holds product options and the order reference.
-- My Orders provides download links for the 3D mockup and design details. When a local copy is unavailable, the signed-in account downloads it from Firebase Storage.
+- Signed-in 3D previews and purchased customizations are stored in each account. Firebase Storage keeps the generated mockup, the original uploaded 3D file, design/order details and preview; Firestore keeps product choices, the original filename and asset paths.
+- My Orders and the administrator order page provide download links for the original uploaded model, generated mockup and design details. If a local copy is unavailable, the account downloads files from Firebase Storage.
 - Saved guest profiles remain local to the browser; checkout requires a signed-in account.
 - Unsynced guest previews and working design files stay in browser storage. Large mockup assets are stored in Firebase Storage rather than embedded in Firestore documents.

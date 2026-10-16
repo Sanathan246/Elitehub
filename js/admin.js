@@ -63,7 +63,7 @@
             <h3 style="margin:8px 0">${escape(customer.name || 'Customer')}</h3>
             <p class="muted" style="margin:0 0 8px">${escape(customer.email)}${customer.phone ? ` · ${escape(customer.phone)}` : ''}</p>
             ${address ? `<p class="muted" style="margin:0 0 14px">${escape(address)}</p>` : ''}
-            ${EH.orderItemsHTML(Array.isArray(order.items) ? order.items : [], true)}
+            ${EH.orderItemsHTML(Array.isArray(order.items) ? order.items.map((item) => Object.assign({}, item, { customizationOwnerUid: item.customizationOwnerUid || order.userId })) : [], true)}
             <p class="muted" style="margin:14px 0 0">Payment: ${escape(order.payment || 'Not specified')}${order.paymentId ? ` · Reference: ${escape(order.paymentId)}` : ''}</p>
           </div>
           <form class="admin-order-form" data-order-index="${index}" style="padding:0 22px 20px">

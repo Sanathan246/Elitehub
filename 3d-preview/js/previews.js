@@ -207,7 +207,7 @@ function renderGrid() {
         <p class="pv-meta">${esc(p.product || '3D preview')}</p>
         <p class="pv-meta">Edited ${dateFmt.format(new Date(p.updatedAt))}${V.folder === ALL && p.folderId ? `<span class="pv-in">${ICONS.folder}${esc(folderName(p.folderId))}</span>` : ''}</p>
         <div class="pv-actions">
-          <a class="btn btn-outline btn-sm" href="3d-preview/customizer.html?id=${encodeURIComponent(p.id)}">Open</a>
+          <a class="btn btn-outline btn-sm" href="3d-preview/customizer.html?id=${encodeURIComponent(p.id)}">${p.orderType ? 'Continue to order' : 'Open'}</a>
           <div class="pv-menu-wrap">
             <button type="button" class="icon-btn" data-menu="${p.id}" aria-haspopup="menu" aria-expanded="false" aria-label="More actions for ${esc(p.name)}">${ICONS.more}</button>
             <div class="pv-menu" role="menu" hidden>

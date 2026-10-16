@@ -15,13 +15,17 @@ service firebase.storage {
     function validCustomizationAsset(assetName) {
       return (assetName == 'mockup.glb' && request.resource.contentType == 'model/gltf-binary')
         || (assetName == 'details.json' && request.resource.contentType == 'application/json')
-        || (assetName == 'preview.png' && request.resource.contentType == 'image/png');
+        || (assetName == 'preview.png' && request.resource.contentType == 'image/png')
+        || (assetName == 'source-model.glb' && request.resource.contentType == 'model/gltf-binary')
+        || (assetName == 'source-model.gltf' && request.resource.contentType == 'model/gltf+json')
+        || (assetName in ['source-model.obj', 'source-model.stl', 'source-model.fbx']
+          && request.resource.contentType == 'application/octet-stream');
     }
 
     match /users/{userId}/customizations/{customizationId}/{assetName} {
       allow read: if isOwner(userId) || isAdmin();
       allow create, update: if isOwner(userId)
-        && assetName in ['mockup.glb', 'details.json', 'preview.png']
+        && assetName in ['mockup.glb', 'details.json', 'preview.png', 'source-model.glb', 'source-model.gltf', 'source-model.obj', 'source-model.stl', 'source-model.fbx']
         && request.resource.size <= 104857600
         && validCustomizationAsset(assetName);
       allow delete: if isOwner(userId) || isAdmin();
