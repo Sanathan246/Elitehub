@@ -8,6 +8,7 @@ The site uses Firebase Authentication and Cloud Firestore for account data. Cust
 - Web app: **Elitehub Web App**; its Firebase configuration is in `js/config.js`.
 - Authentication: **Email/Password** and **Google** providers are enabled. The current storefront sign-in pages use Email/Password.
 - Cloud Firestore: the default database is in **Mumbai** (`asia-south1`), created in production mode.
+- Orders and per-customization Storage paths are saved in Firestore, whose live subscriptions keep the admin and account views updated. Uploaded GLB files stay as binary objects in Firebase Storage, where resumable uploads preserve the original bytes. Realtime Database is not used for this flow because it stores JSON data rather than file objects.
 - Firestore rules: deploy the rules in `firestore.rules`. Customers can access their own profile and orders. The verified administrator email configured in `js/config.js` can list all orders and update only fulfillment and tracking fields.
 - Authorized domains: `localhost`, `elitehub-f33fd.firebaseapp.com`, and `elitehub-f33fd.web.app`.
 

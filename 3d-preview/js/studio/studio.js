@@ -50,6 +50,7 @@ export class Studio extends EventTarget {
     this.handle = null;
     this.model = null;          // { kind: 'template'|'upload', template, params, fileName }
     this.fileBlob = null;
+    this.sourceGroupTransform = null;
     this.appearance = {};
     this.layers = [];
     this.selectedId = null;
@@ -156,7 +157,7 @@ export class Studio extends EventTarget {
   }
 
   async loadFile(blob, fileName, appearance = null) {
-    const h = await loadModelFile(blob, fileName);
+    const h = await loadModelFile(blob, fileName, { maxAnisotropy: this.renderer.capabilities.getMaxAnisotropy() });
     this.fileBlob = blob;
     this._setHandle(h, { kind: 'upload', fileName, stats: h.stats });
     this.setAppearance(appearance || defaultAppearance('upload'));
@@ -172,6 +173,11 @@ export class Studio extends EventTarget {
     }
     this.spin.rotation.y = 0;
     this.handle = h;
+    this.sourceGroupTransform = {
+      position: h.group.position.clone(),
+      quaternion: h.group.quaternion.clone(),
+      scale: h.group.scale.clone(),
+    };
     this.model = info;
     this.spin.add(h.group);
     this._normalize();
@@ -762,7 +768,13 @@ export class Studio extends EventTarget {
   /** Exports the product, its materials and printed artwork as a self-contained GLB. */
   async exportGlb(extras = {}) {
     if (!this.handle) throw new Error('Load a product before exporting a 3D mockup.');
-    const root = this.spin.clone(true);
+    const root = this.handle.group.clone(true);
+    const source = this.sourceGroupTransform;
+    if (source) {
+      root.position.copy(source.position);
+      root.quaternion.copy(source.quaternion);
+      root.scale.copy(source.scale);
+    }
     root.name = extras.name || 'EliteHub 3D Mockup';
     root.traverse((object) => {
       if (object.name === '__ehSelectionFrame') {
@@ -774,13 +786,16 @@ export class Studio extends EventTarget {
         ? object.material.map((material) => material.clone())
         : object.material.clone();
     });
-    root.userData = { ...extras, format: 'EliteHub custom product', version: 1 };
+    root.userData = { ...root.userData, ...extras, format: 'EliteHub custom product', version: 1 };
+    const exportScene = new THREE.Scene();
+    exportScene.add(root);
+    exportScene.updateMatrixWorld(true);
     const exporter = new GLTFExporter();
     return new Promise((resolve, reject) => {
-      exporter.parse(root, (result) => {
+      exporter.parse(exportScene, (result) => {
         if (result instanceof ArrayBuffer) resolve(new Blob([result], { type: 'model/gltf-binary' }));
         else reject(new Error('The 3D mockup exporter did not return a binary GLB.'));
-      }, reject, { binary: true, onlyVisible: true, maxTextureSize: 4096 });
+      }, reject, { binary: true, onlyVisible: true });
     });
   }
 

@@ -498,11 +498,22 @@ function buildFrame() {
 /* Uploaded 3D files                                                   */
 /* ------------------------------------------------------------------ */
 export const ACCEPTED_EXTENSIONS = ['glb', 'gltf', 'obj', 'stl', 'fbx'];
-export const MAX_UPLOAD_MB = 50;
+export const MAX_UPLOAD_MB = 100;
 
 export class ModelFileError extends Error {}
 
-export async function loadModelFile(blob, fileName) {
+function usableNormals(geometry) {
+  const position = geometry.attributes.position;
+  const normal = geometry.attributes.normal;
+  if (!position || !normal || normal.itemSize < 3 || normal.count !== position.count) return false;
+  for (let i = 0; i < normal.count; i++) {
+    const x = normal.getX(i), y = normal.getY(i), z = normal.getZ(i);
+    if (!Number.isFinite(x) || !Number.isFinite(y) || !Number.isFinite(z) || x * x + y * y + z * z < 1e-10) return false;
+  }
+  return true;
+}
+
+export async function loadModelFile(blob, fileName, { maxAnisotropy = 1 } = {}) {
   const ext = (fileName.split('.').pop() || '').toLowerCase();
   if (!ACCEPTED_EXTENSIONS.includes(ext)) {
     throw new ModelFileError(`.${ext} files aren't supported. Upload a .glb, .gltf, .obj, .stl or .fbx file.`);
@@ -518,15 +529,18 @@ export async function loadModelFile(blob, fileName) {
       draco.setDecoderPath(DRACO_PATH);
       loader.setDRACOLoader(draco);
       loader.setMeshoptDecoder(MeshoptDecoder);
-      let data = await blob.arrayBuffer();
-      if (ext === 'gltf') {
-        const json = JSON.parse(new TextDecoder().decode(data));
-        const external = [...(json.buffers || []), ...(json.images || [])].some((b) => b.uri && !b.uri.startsWith('data:'));
-        if (external) throw new ModelFileError('This .gltf points to separate .bin or texture files. Export it as a single .glb file and upload that instead.');
+      try {
+        const data = await blob.arrayBuffer();
+        if (ext === 'gltf') {
+          const json = JSON.parse(new TextDecoder().decode(data));
+          const external = [...(json.buffers || []), ...(json.images || [])].some((b) => b.uri && !b.uri.startsWith('data:'));
+          if (external) throw new ModelFileError('This .gltf points to separate .bin or texture files. Export it as a single .glb file and upload that instead.');
+        }
+        const gltf = await new Promise((res, rej) => loader.parse(data, '', res, rej));
+        root = gltf.scene || gltf.scenes[0];
+      } finally {
+        draco.dispose();
       }
-      const gltf = await new Promise((res, rej) => loader.parse(data, '', res, rej));
-      root = gltf.scene || gltf.scenes[0];
-      draco.dispose();
     } else if (ext === 'obj') {
       root = new OBJLoader().parse(await blob.text());
     } else if (ext === 'stl') {
@@ -542,20 +556,40 @@ export async function loadModelFile(blob, fileName) {
     throw new ModelFileError("This file couldn't be read. Check it opens in another 3D viewer, then export it again as .glb.");
   }
 
+  if (!root?.isObject3D) throw new ModelFileError('No 3D scene was found in this file. Export it as a GLB with a scene and try again.');
+
   const targets = [];
   const originals = new Map();
   let tris = 0;
   root.traverse((o) => {
     if (!o.isMesh) return;
-    if (o.isSkinnedMesh) o.frustumCulled = false;
+    if (o.isSkinnedMesh || o.morphTargetInfluences?.length) o.frustumCulled = false;
     const g = o.geometry;
-    const normal = g.attributes.normal;
-    if (!normal || normal.count !== g.attributes.position.count || !normal.array.every(Number.isFinite)) g.computeVertexNormals();
+    const position = g.attributes.position;
+    if (!position?.count) return;
+    for (let i = 0; i < position.count; i++) {
+      if (!Number.isFinite(position.getX(i)) || !Number.isFinite(position.getY(i)) || !Number.isFinite(position.getZ(i))) {
+        throw new ModelFileError('This model has invalid vertex data that can cause flickering. Re-export it as a GLB with transforms applied, then upload it again.');
+      }
+    }
+    if (!usableNormals(g)) {
+      g.deleteAttribute('normal');
+      g.computeVertexNormals();
+    }
+    g.computeBoundingBox();
+    g.computeBoundingSphere();
     tris += (g.index ? g.index.count : g.attributes.position.count) / 3;
+    /* Keep the floor shadow while excluding uploaded surfaces from self-shadow acne. */
     o.castShadow = true;
-    /* Imported dense meshes can self-shadow with acne; keep their floor shadow only. */
     o.receiveShadow = false;
     originals.set(o, o.material);
+    const materials = Array.isArray(o.material) ? o.material : [o.material];
+    materials.forEach((material) => {
+      if (!material) return;
+      Object.values(material).forEach((value) => {
+        if (value?.isTexture) value.anisotropy = Math.max(value.anisotropy || 1, maxAnisotropy);
+      });
+    });
     targets.push(o);
   });
   if (!targets.length) throw new ModelFileError('No surfaces were found in this file. Check it contains a mesh, not only a camera or rig.');

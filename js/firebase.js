@@ -231,10 +231,14 @@
         await Promise.all(Object.entries(specs).map(async ([key, [filename, contentType]]) => {
           const blob = assets[key];
           if (!(blob instanceof Blob) || !blob.size) throw new Error(`The ${key} file could not be prepared.`);
+          if (blob.size > 100 * 1024 * 1024) throw new Error(`The ${filename} file is larger than the 100 MB upload limit.`);
           const path = `${base}/${filename}`;
-          await storageModule.uploadBytes(storageModule.ref(storage, path), blob, {
+          const task = storageModule.uploadBytesResumable(storageModule.ref(storage, path), blob, {
             contentType,
             customMetadata: { ownerUid: uid, customizationId }
+          });
+          await new Promise((resolve, reject) => {
+            task.on('state_changed', () => {}, reject, resolve);
           });
           paths[key] = path;
         }));

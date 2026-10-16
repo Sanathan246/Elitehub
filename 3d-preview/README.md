@@ -70,7 +70,7 @@ product's default colour, re-render its two images.
 
 ## What the 3D studio does
 
-- **Start**: upload a 3D mockup (.glb, .gltf, .obj, .stl, .fbx, up to 50 MB), or
+- **Start**: upload a 3D mockup (.glb, .gltf, .obj, .stl, .fbx, up to 100 MB), or
   start from any of the 10 products (also reachable from the catalogue).
 - **Design**: add artwork (PNG, JPG, WEBP, SVG) or text in the site's fonts.
   New prints land on the side you're looking at; drag them across the model or
@@ -85,14 +85,17 @@ product's default colour, re-render its two images.
   previews but can't be ordered.
 - **Scene**: Studio dark (matches the reference video), Midnight, Studio light,
   Stone, transparent or any colour; three lighting setups; turntable.
-- **Export**: PNG up to 4K (square, landscape, portrait, transparent), a
-  self-contained 3D mockup (.glb), design details (.json), and 360° video
+- **Export**: a self-contained 3D mockup (.glb) with original texture resolution,
+  PNG up to 4K (square, landscape, portrait, transparent), design details (.json), and 360° video
   (.mp4 in Chrome/Safari, .webm elsewhere).
 - **Save**: to Your account › Your 3D previews, optionally into a folder.
-- **Add to bag** (any orderable product in a catalogue colour): uses `EH.cart.add` exactly
-  like the 2D studio. The bag thumbnail is the 3D render; `EH.files` gets
-  `print:<id>` (the artwork), `preview:<id>` and `3d:<id>` (the full 3D setup),
-  so checkout and the order's "Print file" / "Preview" buttons work unchanged.
+- **Add to bag**: catalogue products use the current shop price. Uploaded models can
+  be ordered as an existing store product. Before adding the cart item, the studio
+  saves a customized GLB, the original uploaded file, a preview and design details
+  in browser storage. At checkout, Firebase Storage keeps those original file bytes;
+  the Firestore order points to a customization record containing their paths, and
+  the admin order page can download the mockup, source model and order details. The
+  full-size file upload requires Firebase Storage rules to be deployed.
 
 Keyboard: Delete removes the selected print (Design tab), Ctrl/Cmd+S saves,
 arrow keys move between tabs.
