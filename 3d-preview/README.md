@@ -70,7 +70,7 @@ product's default colour, re-render its two images.
 
 ## What the 3D studio does
 
-- **Start**: upload a 3D mockup (.glb, .gltf, .obj, .stl, .fbx, up to 100 MB), or
+- **Start**: upload a 3D mockup (.glb, .gltf, .obj, .stl, .fbx, up to 20 MB), or
   start from any of the 10 products (also reachable from the catalogue).
 - **Design**: add artwork (PNG, JPG, WEBP, SVG) or text in the site's fonts.
   New prints land on the side you're looking at; drag them across the model or

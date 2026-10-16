@@ -13,6 +13,8 @@
     const grid = document.getElementById('shopGrid');
     const search = document.getElementById('shopSearch');
     const sort = document.getElementById('shopSort');
+    if (!EH.categories.some((c) => c.id === st.cat)) st.cat = '';
+    if (!Array.from(sort.options).some((o) => o.value === st.sort)) st.sort = 'featured';
     search.value = st.q;
     sort.value = st.sort;
 
@@ -25,7 +27,7 @@
       if (st.tag) p.set('tag', st.tag);
       if (st.q) p.set('q', st.q);
       if (st.sort !== 'featured') p.set('sort', st.sort);
-      history.replaceState(null, '', 'shop.html' + (p.toString() ? '?' + p : ''));
+      history.replaceState(null, '', location.pathname + (p.toString() ? '?' + p : ''));
       // keep header nav highlight in sync
       EH.$$('.main-nav a, .mobile-nav a').forEach((a) => {
         const h = a.getAttribute('href');

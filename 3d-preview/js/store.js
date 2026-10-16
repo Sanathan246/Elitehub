@@ -58,9 +58,12 @@ async function all(storeName, who = owner) {
     : [...memory[storeName].values()].filter((r) => r.owner === who);
   return rows;
 }
-async function getOne(storeName, id) {
+async function getRaw(storeName, id) {
   const db = await openDb();
-  const row = db ? await asPromise(db.transaction(storeName).objectStore(storeName).get(id)) : memory[storeName].get(id);
+  return db ? asPromise(db.transaction(storeName).objectStore(storeName).get(id)) : memory[storeName].get(id);
+}
+async function getOne(storeName, id) {
+  const row = await getRaw(storeName, id);
   return row && row.owner === owner ? row : null;
 }
 async function put(storeName, rec) {
@@ -85,7 +88,18 @@ export const getPreview = (id) => getOne('previews', id);
 
 export async function savePreview(data) {
   const now = Date.now();
-  const existing = data.id ? await getOne('previews', data.id) : null;
+  let existing = null;
+  if (data.id) {
+    const row = await getRaw('previews', data.id);
+    if (row && row.owner !== owner) {
+      /* The id belongs to another account on this device (for example, the person signed
+         out while the preview was open). Save a fresh copy instead of overwriting theirs. */
+      const { id, cloudPaths, cloudSynced, cloudOwnerUid, ...rest } = data;
+      data = rest;
+    } else {
+      existing = row || null;
+    }
+  }
   const rec = { folderId: null, createdAt: now, ...(existing || {}), ...data, owner, updatedAt: now };
   if (!rec.id) rec.id = newId('pv');
   await put('previews', rec);
@@ -105,7 +119,8 @@ export async function movePreview(id, folderId) {
 export async function duplicatePreview(id) {
   const p = await getPreview(id);
   if (!p) return null;
-  const { id: _id, createdAt, updatedAt, ...rest } = p;
+  // The copy exists only on this device until it is saved again while signed in.
+  const { id: _id, createdAt, updatedAt, cloudPaths, cloudSynced, cloudOwnerUid, ...rest } = p;
   return savePreview({ ...rest, name: `${p.name} (copy)` });
 }
 export async function deletePreview(id) {

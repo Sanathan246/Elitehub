@@ -15,16 +15,31 @@
     try { coupon = sessionStorage.getItem('eh_coupon') || ''; } catch (e) { /* ignore */ }
     let firebaseApi = null;
     let firebaseUser = null;
+    let pendingOnline = null;   // an online order already saved as "Payment pending", reused if payment is retried
 
+    /* Sign-in links come back to checkout afterwards. */
+    if (accountGate) {
+      const login = accountGate.querySelector('a[href="login.html"]');
+      const signup = accountGate.querySelector('a[href="signup.html"]');
+      if (login) login.href = EH.authLink('login.html', 'checkout.html');
+      if (signup) signup.href = EH.authLink('signup.html', 'checkout.html');
+    }
+    const onAuth = (user) => {
+      firebaseUser = user || null;
+      if (accountGate && document.getElementById('checkoutForm')) accountGate.hidden = !!firebaseUser;
+      if (firebaseUser) {
+        if (accountError) accountError.textContent = '';
+        prefillFor(firebaseUser);
+      }
+    };
     const attachFirebase = (api) => {
       if (!api || firebaseApi === api) return;
       firebaseApi = api;
       firebaseUser = api.currentUser || null;
-      if (api.enabled) api.subscribeAuth((user) => { firebaseUser = user || null; });
+      if (api.enabled) api.subscribeAuth(onAuth);
     };
     document.addEventListener('firebase:ready', (e) => attachFirebase(e.detail && e.detail.api ? e.detail.api : window.EHFirebase));
-    document.addEventListener('firebase:auth-changed', (e) => { firebaseUser = e.detail && e.detail.user ? e.detail.user : null; });
-    if (window.EHFirebase) attachFirebase(window.EHFirebase);
+    document.addEventListener('firebase:auth-changed', (e) => onAuth(e.detail && e.detail.user ? e.detail.user : null));
 
     /* payment methods available from config */
     const methods = [];
@@ -36,9 +51,27 @@
 
     $('#f-state').insertAdjacentHTML('beforeend', STATES.map((s) => `<option>${s}</option>`).join(''));
 
-    /* prefill saved details */
-    const prof = EH.store.get('eh_profile', null);
-    if (prof) Object.keys(prof).forEach((k) => { const el = form.elements[k]; if (el && prof[k]) el.value = prof[k]; });
+    /* prefill saved details: only empty fields, and only details that belong to this person */
+    const fillEmpty = (profile) => {
+      if (!profile || typeof profile !== 'object' || !document.getElementById('checkoutForm')) return;
+      Object.keys(profile).forEach((k) => {
+        const el = form.elements[k];
+        if (el && k !== 'notes' && typeof profile[k] === 'string' && profile[k] && !el.value) el.value = profile[k];
+      });
+    };
+    let prefilledFor = null;
+    async function prefillFor(user) {
+      if (!user || prefilledFor === user.uid) return;
+      prefilledFor = user.uid;
+      const local = EH.localProfile.read(user.uid);
+      if (local) { fillEmpty(local); return; }
+      try {
+        if (firebaseApi && firebaseApi.enabled) fillEmpty(await firebaseApi.loadProfile(user.uid));
+      } catch (error) { console.warn('Saved details could not be loaded.', error); }
+    }
+    fillEmpty(EH.localProfile.read(''));
+
+    if (window.EHFirebase) attachFirebase(window.EHFirebase);
 
     function renderPay() {
       $('#payOptions').innerHTML = methods.map((m) => `<label class="pay-opt ${m.id === payment ? 'active' : ''}"><input type="radio" name="payment" value="${m.id}" ${m.id === payment ? 'checked' : ''}><div><strong>${m.title}</strong><span>${m.sub}</span></div>${EH.icon(m.icon)}</label>`).join('');
@@ -50,7 +83,13 @@
         return;
       }
       const t = EH.totals(items, coupon, payment);
-      if (coupon && !t.coupon) { coupon = ''; }
+      if (coupon && !t.coupon) {
+        const check = EH.coupon(coupon, t.subtotal);
+        const note = $('#couponNote');
+        if (note) { note.textContent = check && check.error ? `“${coupon}” was removed: ${check.error}` : `“${coupon}” was removed.`; note.className = 'form-note err'; }
+        coupon = '';
+        try { sessionStorage.removeItem('eh_coupon'); } catch (e) { /* ignore */ }
+      }
       $('#sumItems').innerHTML = EH.orderItemsHTML(items);
       $('#sumTotals').innerHTML = EH.totalsHTML(t);
       const btn = $('#placeOrder');
@@ -63,7 +102,12 @@
     document.addEventListener('cart:change', () => { if (document.getElementById('checkoutForm')) renderSummary(); });
     if (!document.getElementById('checkoutForm')) return;   // bag was empty: the empty state is showing
 
-    $('#payOptions').addEventListener('change', (e) => { if (e.target.name === 'payment') { payment = e.target.value; renderPay(); renderSummary(); } });
+    $('#payOptions').addEventListener('change', (e) => {
+      if (e.target.name !== 'payment') return;
+      payment = e.target.value;
+      EH.$$('.pay-opt', $('#payOptions')).forEach((label) => label.classList.toggle('active', label.querySelector('input').value === payment));
+      renderSummary();
+    });
 
     /* coupons */
     $('#couponBtn').addEventListener('click', () => {
@@ -205,7 +249,8 @@
       btn.textContent = 'Connecting…';
       setStatus('Connecting to secure order storage. Please wait.');
       try {
-        if (!firebaseApi || !firebaseApi.enabled) throw new Error('Order storage is unavailable. Please try again later.');
+        if (!firebaseApi) attachFirebase(await EH.whenFirebase(15000));
+        if (!firebaseApi || !firebaseApi.enabled) throw new Error('Order storage could not load. Check your connection and refresh the page.');
         await firebaseApi.ready;
         const orderUser = firebaseApi.currentUser || firebaseUser;
         if (!orderUser) {
@@ -236,18 +281,34 @@
         }
         const f = form.elements;
         const customer = { name: f.name.value.trim(), phone: f.phone.value.trim(), email: f.email.value.trim(), address1: f.address1.value.trim(), address2: f.address2.value.trim(), city: f.city.value.trim(), state: f.state.value, pincode: f.pincode.value.trim(), notes: f.notes.value.trim() };
-        if ($('#f-save').checked) { const p = Object.assign({}, customer); delete p.notes; EH.store.set('eh_profile', p); }
-        const order = { id: EH.orderId(), date: new Date().toISOString(), customer, items, totals: EH.totals(items, coupon, payment), payment, status: payment === 'online' ? 'Payment pending' : 'Placed' };
+        if ($('#f-save').checked) {
+          const p = Object.assign({}, customer);
+          delete p.notes;
+          EH.localProfile.write(p, orderUser.uid);
+          firebaseApi.saveProfile(orderUser.uid, p).catch((error) => console.warn('Saved details could not sync to the account.', error));
+        }
+        const totals = EH.totals(items, coupon, payment);
+        /* A cancelled or failed online payment leaves its order saved as "Payment pending".
+           Retrying with the same bag and details pays for that order instead of creating another. */
+        const signature = payment === 'online' ? JSON.stringify([orderUser.uid, customer, totals, items.map((it) => [it.key, it.qty, it.price])]) : '';
+        const reuse = !!signature && !!pendingOnline && pendingOnline.signature === signature;
+        const order = reuse ? pendingOnline.order
+          : { id: EH.orderId(), date: new Date().toISOString(), customer, items, totals, payment, status: payment === 'online' ? 'Payment pending' : 'Placed' };
 
-        btn.textContent = items.some((item) => item.custom3d) ? 'Saving design and order…' : 'Saving your order…';
-        setStatus(items.some((item) => item.custom3d)
-          ? 'Uploading your custom 3D files and saving the order. Keep this page open.'
-          : 'Saving your order. Please keep this page open.');
-        await savePurchasedCustomizations(firebaseApi, orderUser, order);
-        await firebaseApi.saveOrder(orderUser.uid, order);
+        if (!reuse) {
+          btn.textContent = items.some((item) => item.custom3d) ? 'Saving design and order…' : 'Saving your order…';
+          setStatus(items.some((item) => item.custom3d)
+            ? 'Uploading your custom 3D files and saving the order. Keep this page open.'
+            : 'Saving your order. Please keep this page open.');
+          await savePurchasedCustomizations(firebaseApi, orderUser, order);
+          await firebaseApi.saveOrder(orderUser.uid, order);
+          if (payment === 'online') pendingOnline = { signature, order };
+        }
         if (payment === 'online') {
           btn.textContent = 'Opening secure payment…';
-          setStatus('Your order and design files are saved. Complete payment in the secure window.');
+          setStatus(reuse
+            ? 'Your order is already saved. Complete payment in the secure window.'
+            : 'Your order and design files are saved. Complete payment in the secure window.');
           order.paymentId = await payOnline(order);
           order.status = 'Paid';
           try {
@@ -256,6 +317,7 @@
             console.warn('Paid order status could not be synced to Firebase.', error);
             EH.toast('Payment succeeded, but the order update could not sync. Please contact us with your order number.', { type: 'error', duration: 6000 });
           }
+          pendingOnline = null;
           finalize(order);
           return;
         }
@@ -272,9 +334,15 @@
       } catch (error) {
         if (whatsappWindow) whatsappWindow.close();
         if (error.message !== 'Payment was cancelled — your bag is still saved.') console.error('Order could not be placed.', error);
-        const message = ['storage/unauthorized', 'permission-denied', 'firestore/permission-denied'].includes(error?.code)
-          ? 'The store could not save your order or its 3D files. Please contact us so we can fix the upload settings.'
-          : (error?.message || 'Your order could not be saved. Please try again.');
+        const message = ['storage/bucket-not-found', 'storage/no-default-bucket'].includes(String(error?.code || ''))
+          ? 'Custom 3D ordering is not available yet because the store has not finished setting up Firebase Storage. Your order was not placed.'
+          : String(error?.code || '').startsWith('storage/')
+            ? 'The store could not save your 3D design files. Your order was not placed; please contact the store about its upload settings.'
+          : ['resource-exhausted', 'firestore/resource-exhausted'].includes(String(error?.code || ''))
+            ? 'The free cloud storage quota is full. Your order was not placed; contact the store to clear space or choose another storage option.'
+          : ['permission-denied', 'firestore/permission-denied'].includes(error?.code)
+            ? 'The store could not save your order. Please contact us so we can fix this.'
+            : (error?.message || 'Your order could not be saved. Please try again.');
         setStatus(message, 'err');
         EH.toast(message, { type: 'error', duration: 6500 });
       } finally {
@@ -297,7 +365,7 @@
       dialog.setAttribute('tabindex', '-1');
       dialog.innerHTML = `<button class="modal-backdrop" type="button" data-close-tracking aria-label="Close tracking window"></button>
         <section class="modal-box tracking-box">
-          <button class="btn-icon modal-close" type="button" data-close-tracking aria-label="Close tracking window">${EH.icon('close')}</button>
+          <button class="icon-btn modal-close" type="button" data-close-tracking aria-label="Close tracking window">${EH.icon('x')}</button>
           <p class="eyebrow">Order #${EH.esc(order.id)}</p>
           <h3 id="trackingTitle">Order tracking</h3>
           <p class="muted tracking-current">Current status: <strong>${EH.esc(order.status)}</strong></p>
@@ -310,10 +378,12 @@
           <p class="tracking-disclaimer">Shipping status and tracking details will appear under My Orders after the store updates your order. For help, use the contact option on your order confirmation.</p>
           <button class="btn btn-gold btn-block" type="button" data-close-tracking>Done</button>
         </section>`;
+      const opener = document.activeElement;
       const close = () => {
         dialog.classList.remove('open');
         document.removeEventListener('keydown', onKeydown);
         dialog.remove();
+        if (opener && opener.isConnected && typeof opener.focus === 'function') opener.focus();
       };
       const onKeydown = (event) => {
         if (event.key === 'Escape') close();
@@ -330,7 +400,8 @@
     }
 
     function finalize(order) {
-      const orders = EH.store.get('eh_orders', []);
+      const stored = EH.store.get('eh_orders', []);
+      const orders = Array.isArray(stored) ? stored : [];
       orders.unshift(order);
       if (!EH.store.set('eh_orders', orders.slice(0, 30))) {
         // storage full — keep the order without custom thumbnails

@@ -115,7 +115,7 @@ async function syncCloudPreviews() {
         });
         localIds.add(id);
       } catch (error) {
-        cloudSyncWarning = 'Some saved previews could not be downloaded. Check Firebase Storage access and try again.';
+        cloudSyncWarning = 'Some saved previews could not be downloaded. Check your cloud access and try again.';
         console.warn('A saved cloud preview could not be loaded.', record.id, error);
       }
     }

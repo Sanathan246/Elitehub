@@ -12,6 +12,15 @@ service firebase.storage {
       return request.auth != null && request.auth.uid == userId;
     }
 
+    function customizationHasOrder(userId, customizationId) {
+      let customizationPath = /databases/(default)/documents/users/$(userId)/customizations/$(customizationId);
+      let customization = firestore.get(customizationPath);
+      return firestore.exists(customizationPath)
+        && customization.data.orderId is string
+        && customization.data.orderId.size() > 0
+        && firestore.exists(/databases/(default)/documents/users/$(userId)/orders/$(customization.data.orderId));
+    }
+
     function validCustomizationAsset(assetName) {
       return (assetName == 'mockup.glb' && request.resource.contentType == 'model/gltf-binary')
         || (assetName == 'details.json' && request.resource.contentType == 'application/json')
@@ -25,10 +34,12 @@ service firebase.storage {
     match /users/{userId}/customizations/{customizationId}/{assetName} {
       allow read: if isOwner(userId) || isAdmin();
       allow create, update: if isOwner(userId)
+        && !customizationHasOrder(userId, customizationId)
         && assetName in ['mockup.glb', 'details.json', 'preview.png', 'source-model.glb', 'source-model.gltf', 'source-model.obj', 'source-model.stl', 'source-model.fbx']
-        && request.resource.size <= 104857600
+        && ((assetName in ['source-model.glb', 'source-model.gltf', 'source-model.obj', 'source-model.stl', 'source-model.fbx'] && request.resource.size <= 20971520)
+          || (assetName in ['mockup.glb', 'details.json', 'preview.png'] && request.resource.size <= 104857600))
         && validCustomizationAsset(assetName);
-      allow delete: if isOwner(userId) || isAdmin();
+      allow delete: if isAdmin() || (isOwner(userId) && !customizationHasOrder(userId, customizationId));
     }
   }
 }

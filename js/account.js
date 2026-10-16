@@ -155,7 +155,7 @@
       if (orderTabs) orderTabs.hidden = true;
       if (orderCount) orderCount.textContent = '';
       box.innerHTML = authResolved
-        ? `<div class="empty-state">${EH.icon('lock')}<h3>Sign in to view your orders</h3><p>Your order history is private to your account. Sign in to see your orders and track them.</p><a class="btn btn-gold btn-sm" href="#authPanel">Sign in ${EH.icon('arrow', 'ico-arrow')}</a></div>`
+        ? `<div class="empty-state">${EH.icon('lock')}<h3>Sign in to view your orders</h3><p>Your order history is private to your account. Sign in to see your orders and track them.</p><a class="btn btn-gold btn-sm" href="${EH.esc(location.pathname + location.search)}#authPanel">Sign in ${EH.icon('arrow', 'ico-arrow')}</a></div>`
         : `<div class="panel">Loading your orders…</div>`;
     }
 
@@ -341,8 +341,7 @@
     }
 
     /* saved details */
-    const prof = EH.store.get('eh_profile', {}) || {};
-    fillProfile(prof);
+    fillProfile(EH.localProfile.read('') || {});
 
     const rules = {
       name: (v) => !v || v.length >= 2,
@@ -382,7 +381,7 @@
         EH.toast('Please check the highlighted fields', { type: 'error' });
         return;
       }
-      if (!EH.store.set('eh_profile', data)) {
+      if (!EH.localProfile.write(data, authUser ? authUser.uid : '')) {
         setNote(profileNote, 'Could not save details in this browser.', 'err');
         EH.toast('Could not save your details in this browser.', { type: 'error' });
         return;
@@ -419,7 +418,7 @@
           console.warn('Firebase profile clear failed.', error);
         }
       }
-      EH.store.remove('eh_profile');
+      EH.localProfile.clear();
       EH.store.remove(orderKey);
       form.reset();
       Object.keys(rules).forEach((name) => validateField(name));
@@ -427,6 +426,18 @@
       renderOrders(authUser ? allOrders : []);
       EH.toast(cloudError ? 'Local saved data cleared.' : 'Saved data cleared', cloudError ? { type: 'error' } : undefined);
     });
+
+    /** True once Firebase is usable; waits briefly if it is still loading. */
+    const firebaseReady = async () => {
+      if (!firebaseApi) {
+        setNote(authNote, 'Connecting to your account…');
+        const api = await EH.whenFirebase(10000);
+        if (api) setupFirebase(api);
+      }
+      if (firebaseApi && firebaseApi.enabled) return true;
+      setFirebaseAvailability(firebaseApi || { enabled: false, reason: 'timeout' });
+      return false;
+    };
 
     /* Firebase account access */
     const authErrorMessage = (error) => {
@@ -576,9 +587,11 @@
         setNote(authNote, '');
         return;
       }
-      const message = api && api.reason === 'initialization-failed'
-        ? 'Firebase could not load. Check the project configuration and refresh.'
-        : 'Add your Firebase web app config in js/config.js to enable account login.';
+      const message = !api || api.reason === 'timeout'
+        ? 'Account sign-in could not load. Check your connection and refresh the page.'
+        : api.reason === 'initialization-failed'
+          ? 'Firebase could not load. Check the project configuration and refresh.'
+          : 'Add your Firebase web app config in js/config.js to enable account login.';
       setNote(authNote, message);
     };
 
@@ -587,12 +600,19 @@
       try {
         await firebaseApi.ready;
         const remote = await firebaseApi.loadProfile(user.uid);
-        if (remote !== null) {
+        if (!authUser || authUser.uid !== user.uid) return;
+        if (hasProfile(remote)) {
           fillProfile(remote);
-          EH.store.set('eh_profile', readProfile());
+          EH.localProfile.write(readProfile(), user.uid);
         } else {
-          const local = EH.store.get('eh_profile', {}) || {};
-          if (hasProfile(local)) await firebaseApi.saveProfile(user.uid, local);
+          /* Only details typed in while signed out (or already this account's) may be adopted;
+             never another account's address left on a shared device. */
+          const local = EH.localProfile.read(user.uid);
+          fillProfile(local || {});
+          if (hasProfile(local)) {
+            EH.localProfile.write(local, user.uid);
+            await firebaseApi.saveProfile(user.uid, local);
+          }
         }
         setNote(profileNote, 'Your signed-in profile is ready to use.', 'ok');
       } catch (error) {
@@ -624,7 +644,9 @@
     };
 
     const renderAuthState = (user) => {
+      const previous = authUser;
       authUser = user || null;
+      if (previous && !authUser) fillProfile(EH.localProfile.read('') || {});
       const signedIn = Boolean(authUser);
       if (profileHub) profileHub.hidden = !signedIn;
       if (authPanel) authPanel.hidden = signedIn;
@@ -685,10 +707,7 @@
         result.first?.focus();
         return;
       }
-      if (!firebaseApi || !firebaseApi.enabled) {
-        setNote(authNote, 'Add your Firebase web app config in js/config.js to enable account login.');
-        return;
-      }
+      if (!(await firebaseReady())) return;
       setAuthBusy(true);
       const email = authEmail.value.trim().toLowerCase();
       try {
@@ -702,7 +721,7 @@
           }
           const data = readProfile();
           if (hasProfile(data)) {
-            EH.store.set('eh_profile', data);
+            EH.localProfile.write(data, credential.user.uid);
             try { await firebaseApi.saveProfile(credential.user.uid, data); } catch (error) { console.warn('Firebase profile save after signup failed.', error); }
           }
           EH.toast('Your EliteHub account is ready');
@@ -717,17 +736,14 @@
       }
     });
 
-    resetPassword.addEventListener('click', async () => {
+    if (resetPassword) resetPassword.addEventListener('click', async () => {
       const email = authEmail.value.trim().toLowerCase();
       if (!EH.validEmail(email)) {
         setAuthFieldState(authEmail, false);
         authEmail.focus();
         return;
       }
-      if (!firebaseApi || !firebaseApi.enabled) {
-        setNote(authNote, 'Add your Firebase web app config in js/config.js to enable account login.');
-        return;
-      }
+      if (!(await firebaseReady())) return;
       setAuthBusy(true);
       try {
         await firebaseApi.ready;
@@ -743,25 +759,27 @@
     if (acctSignOut) acctSignOut.addEventListener('click', async () => {
       if (!firebaseApi || !firebaseApi.enabled || authBusy) return;
       setAuthBusy(true);
+      acctSignOut.disabled = true;
+      const uid = authUser && authUser.uid;
       try {
         await firebaseApi.signOut();
+        EH.localProfile.forget(uid);
+        fillProfile(EH.localProfile.read('') || {});
         setAuthMode('login');
-        setNote(profileNote, 'Signed out. Your local saved details are still available on this device.', 'ok');
+        setNote(profileNote, 'Signed out. Your details stay safe in your account and were removed from this device.', 'ok');
         window.scrollTo({ top: 0, behavior: 'smooth' });
       } catch (error) {
         setNote(profileNote, authErrorMessage(error), 'err');
       } finally {
         setAuthBusy(false);
+        acctSignOut.disabled = false;
       }
     });
 
     /* Sign in with Google */
     if (googleBtn) googleBtn.addEventListener('click', async () => {
       if (authBusy) return;
-      if (!firebaseApi || !firebaseApi.enabled) {
-        setNote(authNote, 'Add your Firebase web app config in js/config.js to enable account login.');
-        return;
-      }
+      if (!(await firebaseReady())) return;
       setAuthBusy(true);
       setNote(authNote, '');
       try {
@@ -773,7 +791,7 @@
           if (user.email && !form.elements.email.value.trim()) form.elements.email.value = user.email;
           const data = readProfile();
           if (hasProfile(data)) {
-            EH.store.set('eh_profile', data);
+            EH.localProfile.write(data, user.uid);
             try { await firebaseApi.saveProfile(user.uid, data); } catch (error) { console.warn('Firebase profile save after Google sign-up failed.', error); }
           }
           EH.toast('Your EliteHub account is ready');
@@ -789,11 +807,11 @@
 
     /* Login & Security */
     const closeNameEdit = () => {
-      lsNameForm.hidden = true;
-      lsNameEdit.hidden = false;
+      if (lsNameForm) lsNameForm.hidden = true;
+      if (lsNameEdit) lsNameEdit.hidden = false;
     };
 
-    lsNameEdit.addEventListener('click', () => {
+    if (lsNameEdit) lsNameEdit.addEventListener('click', () => {
       lsNameInput.value = authUser && authUser.displayName ? authUser.displayName : '';
       lsNameForm.hidden = false;
       lsNameEdit.hidden = true;
@@ -801,9 +819,9 @@
       lsNameInput.focus();
     });
 
-    lsNameCancel.addEventListener('click', closeNameEdit);
+    if (lsNameCancel) lsNameCancel.addEventListener('click', closeNameEdit);
 
-    lsNameForm.addEventListener('submit', async (e) => {
+    if (lsNameForm) lsNameForm.addEventListener('submit', async (e) => {
       e.preventDefault();
       const name = lsNameInput.value.trim();
       if (name.length < 2) {
@@ -815,7 +833,7 @@
       try {
         await firebaseApi.ready;
         await firebaseApi.updateUser(authUser, { displayName: name });
-        lsName.textContent = name;
+        if (lsName) lsName.textContent = name;
         if (profileWelcome) profileWelcome.textContent = name;
         renderAvatar(authUser);
         closeNameEdit();
@@ -827,7 +845,7 @@
       }
     });
 
-    lsPasswordReset.addEventListener('click', async () => {
+    if (lsPasswordReset) lsPasswordReset.addEventListener('click', async () => {
       if (!authUser || !authUser.email || !firebaseApi || !firebaseApi.enabled) return;
       lsPasswordReset.disabled = true;
       try {
@@ -844,6 +862,12 @@
     setAuthMode('login');
     document.addEventListener('firebase:ready', (e) => setupFirebase(e.detail && e.detail.api ? e.detail.api : window.EHFirebase));
     if (window.EHFirebase) setupFirebase(window.EHFirebase);
+    EH.whenFirebase(15000).then((api) => {
+      if (api || firebaseApi) return;
+      authResolved = true;
+      setFirebaseAvailability({ enabled: false, reason: 'timeout' });
+      renderOrders();
+    });
 
     renderOrders();
   });

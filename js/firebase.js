@@ -14,6 +14,8 @@
     currentUser: null,
     subscribeAuth() { return () => {}; },
     signInWithGoogle() { return Promise.reject(unavailableError()); },
+    sendVerification() { return Promise.reject(unavailableError()); },
+    reloadUser() { return Promise.resolve(null); },
     saveProfile() { return Promise.reject(unavailableError()); },
     loadProfile() { return Promise.resolve(null); },
     clearProfile() { return Promise.resolve(); },
@@ -55,6 +57,96 @@
       .catch((error) => console.warn('Firebase browser persistence is unavailable.', error));
     let resolveAuthReady;
     const authReady = new Promise((resolve) => { resolveAuthReady = resolve; });
+    const FIRESTORE_ASSET_CHUNK_BYTES = 700 * 1024;
+    const FIRESTORE_ASSET_MAX_BYTES = 100 * 1024 * 1024;
+    const FIRESTORE_SOURCE_MODEL_MAX_BYTES = 20 * 1024 * 1024;
+    const FIRESTORE_ASSET_BATCH_SIZE = 400;
+
+    const firestoreAssetRef = (uid, customizationId, assetName) => firestoreModule.doc(
+      db, 'users', uid, 'customizations', customizationId, 'assets', assetName
+    );
+    const firestoreAssetChunksRef = (uid, customizationId, assetName) => firestoreModule.collection(
+      db, 'users', uid, 'customizations', customizationId, 'assets', assetName, 'chunks'
+    );
+    const firestoreAssetPath = (uid, customizationId, assetName) =>
+      `firestore://${uid}/${customizationId}/${assetName}`;
+    const parseFirestoreAssetPath = (uid, path) => {
+      const match = /^firestore:\/\/([^/]+)\/([A-Za-z0-9_-]{1,120})\/(mockup|details|preview|sourceModel)$/.exec(String(path || ''));
+      return match && match[1] === uid ? { customizationId: match[2], assetName: match[3] } : null;
+    };
+
+    async function deleteFirestoreAssetChunks(uid, customizationId, assetName, exceptUploadId = '') {
+      const snapshot = await firestoreModule.getDocs(firestoreAssetChunksRef(uid, customizationId, assetName));
+      const stale = snapshot.docs.filter((item) => item.data().uploadId !== exceptUploadId);
+      for (let offset = 0; offset < stale.length; offset += FIRESTORE_ASSET_BATCH_SIZE) {
+        const batch = firestoreModule.writeBatch(db);
+        stale.slice(offset, offset + FIRESTORE_ASSET_BATCH_SIZE).forEach((item) => batch.delete(item.ref));
+        await batch.commit();
+      }
+    }
+
+    async function uploadFirestoreAsset(uid, customizationId, assetName, blob, contentType) {
+      if (!(blob instanceof Blob) || !blob.size) throw new Error(`The ${assetName} file could not be prepared.`);
+      if (assetName === 'sourceModel' && blob.size > FIRESTORE_SOURCE_MODEL_MAX_BYTES) throw new Error('Uploaded 3D models must be 20 MB or smaller.');
+      if (blob.size > FIRESTORE_ASSET_MAX_BYTES) throw new Error('A 3D design file is larger than the 100 MB free-storage fallback limit.');
+      const assetRef = firestoreAssetRef(uid, customizationId, assetName);
+      const uploadId = `${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 12)}`;
+      const bytes = new Uint8Array(await blob.arrayBuffer());
+      const chunkCount = Math.ceil(bytes.byteLength / FIRESTORE_ASSET_CHUNK_BYTES);
+
+      for (let offset = 0; offset < chunkCount; offset += FIRESTORE_ASSET_BATCH_SIZE) {
+        const batch = firestoreModule.writeBatch(db);
+        const end = Math.min(chunkCount, offset + FIRESTORE_ASSET_BATCH_SIZE);
+        for (let index = offset; index < end; index += 1) {
+          const startByte = index * FIRESTORE_ASSET_CHUNK_BYTES;
+          const chunk = bytes.slice(startByte, Math.min(bytes.byteLength, startByte + FIRESTORE_ASSET_CHUNK_BYTES));
+          const chunkId = `${uploadId}_${String(index).padStart(4, '0')}`;
+          batch.set(firestoreModule.doc(firestoreAssetChunksRef(uid, customizationId, assetName), chunkId), {
+            uploadId,
+            index,
+            chunk: firestoreModule.Bytes.fromUint8Array(chunk),
+          });
+        }
+        await batch.commit();
+      }
+
+      await firestoreModule.setDoc(assetRef, {
+        uploadId,
+        chunkCount,
+        size: bytes.byteLength,
+        contentType,
+        updatedAt: firestoreModule.serverTimestamp(),
+      });
+      await deleteFirestoreAssetChunks(uid, customizationId, assetName, uploadId);
+      return firestoreAssetPath(uid, customizationId, assetName);
+    }
+
+    async function downloadFirestoreAsset(uid, customizationId, assetName) {
+      const assetSnapshot = await firestoreModule.getDoc(firestoreAssetRef(uid, customizationId, assetName));
+      if (!assetSnapshot.exists()) throw new Error('The saved 3D file is missing from cloud storage.');
+      const metadata = assetSnapshot.data();
+      if (!Number.isInteger(metadata.size) || metadata.size < 1 || metadata.size > FIRESTORE_ASSET_MAX_BYTES
+        || !Number.isInteger(metadata.chunkCount) || metadata.chunkCount < 1 || metadata.chunkCount > 150
+        || typeof metadata.uploadId !== 'string') {
+        throw new Error('The saved 3D file record is incomplete. Please contact the store.');
+      }
+      const snapshot = await firestoreModule.getDocs(firestoreAssetChunksRef(uid, customizationId, assetName));
+      const chunks = snapshot.docs.map((item) => item.data())
+        .filter((item) => item.uploadId === metadata.uploadId)
+        .sort((a, b) => a.index - b.index);
+      if (chunks.length !== metadata.chunkCount || chunks.some((item, index) => item.index !== index)) {
+        throw new Error('The saved 3D file is incomplete. Please contact the store.');
+      }
+      const bytes = new Uint8Array(metadata.size);
+      chunks.forEach((item, index) => {
+        if (!item.chunk || typeof item.chunk.toUint8Array !== 'function') throw new Error('A saved 3D file section could not be read.');
+        const data = item.chunk.toUint8Array();
+        const start = index * FIRESTORE_ASSET_CHUNK_BYTES;
+        if (start + data.byteLength > bytes.byteLength) throw new Error('The saved 3D file has invalid size information.');
+        bytes.set(data, start);
+      });
+      return new Blob([bytes], { type: metadata.contentType || 'application/octet-stream' });
+    }
 
     const cleanOrder = (order = {}) => {
       const items = Array.isArray(order.items) ? order.items.map((item = {}) => {
@@ -104,6 +196,19 @@
       },
       resetPassword(email) {
         return authModule.sendPasswordResetEmail(auth, email);
+      },
+      sendVerification() {
+        if (!auth.currentUser) return Promise.reject(new Error('A signed-in user is required.'));
+        return authModule.sendEmailVerification(auth.currentUser);
+      },
+      /** Refreshes the signed-in user (and their ID token) after they verify their email elsewhere. */
+      async reloadUser() {
+        const user = auth.currentUser;
+        if (!user) return null;
+        await user.reload();
+        await user.getIdToken(true);
+        api.currentUser = auth.currentUser;
+        return auth.currentUser;
       },
       signOut() {
         return authModule.signOut(auth);
@@ -230,20 +335,32 @@
           specs.sourceModel = sourceSpecs[ext];
         }
         const paths = {};
-        await Promise.all(Object.entries(specs).map(async ([key, [filename, contentType]]) => {
-          const blob = assets[key];
-          if (!(blob instanceof Blob) || !blob.size) throw new Error(`The ${key} file could not be prepared.`);
-          if (blob.size > 100 * 1024 * 1024) throw new Error(`The ${filename} file is larger than the 100 MB upload limit.`);
-          const path = `${base}/${filename}`;
-          const task = storageModule.uploadBytesResumable(storageModule.ref(storage, path), blob, {
-            contentType,
-            customMetadata: { ownerUid: uid, customizationId }
-          });
-          await new Promise((resolve, reject) => {
-            task.on('state_changed', () => {}, reject, resolve);
-          });
-          paths[key] = path;
-        }));
+        let storageBucketMissing = false;
+        try {
+          await Promise.all(Object.entries(specs).map(async ([key, [filename, contentType]]) => {
+            const blob = assets[key];
+            if (!(blob instanceof Blob) || !blob.size) throw new Error(`The ${key} file could not be prepared.`);
+            if (key === 'sourceModel' && blob.size > FIRESTORE_SOURCE_MODEL_MAX_BYTES) throw new Error('Uploaded 3D models must be 20 MB or smaller.');
+            if (blob.size > FIRESTORE_ASSET_MAX_BYTES) throw new Error(`The ${filename} file is larger than the 100 MB upload limit.`);
+            const path = `${base}/${filename}`;
+            const task = storageModule.uploadBytesResumable(storageModule.ref(storage, path), blob, {
+              contentType,
+              customMetadata: { ownerUid: uid, customizationId }
+            });
+            await new Promise((resolve, reject) => {
+              task.on('state_changed', () => {}, reject, resolve);
+            });
+            paths[key] = path;
+          }));
+        } catch (error) {
+          if (!['storage/bucket-not-found', 'storage/no-default-bucket', 'storage/unauthorized'].includes(String(error?.code || ''))) throw error;
+          storageBucketMissing = true;
+        }
+        if (storageBucketMissing) {
+          await Promise.all(Object.entries(specs).map(async ([key, [, contentType]]) => {
+            paths[key] = await uploadFirestoreAsset(uid, customizationId, key, assets[key], contentType);
+          }));
+        }
         const data = {
           id: customizationId,
           ownerUid: uid,
@@ -297,12 +414,19 @@
         const current = auth.currentUser;
         const isOwner = !!current && current.uid === uid;
         if (!uid || !isOwner) throw new Error('Sign in to delete this saved 3D preview.');
-        const docRef = firestoreModule.doc(db, 'users', uid, 'customizations', String(id || ''));
+        const customizationId = String(id || '');
+        const docRef = firestoreModule.doc(db, 'users', uid, 'customizations', customizationId);
         const snapshot = await firestoreModule.getDoc(docRef);
         if (!snapshot.exists()) return false;
         const record = snapshot.data();
         if (record.orderId) throw new Error('Files already attached to an order cannot be deleted here.');
         await Promise.all(Object.values(record.assets || {}).map(async (path) => {
+          const firestoreAsset = parseFirestoreAssetPath(uid, path);
+          if (firestoreAsset && firestoreAsset.customizationId === customizationId) {
+            await deleteFirestoreAssetChunks(uid, customizationId, firestoreAsset.assetName);
+            await firestoreModule.deleteDoc(firestoreAssetRef(uid, customizationId, firestoreAsset.assetName));
+            return;
+          }
           if (typeof path === 'string' && path.startsWith(`users/${uid}/customizations/`)) {
             try { await storageModule.deleteObject(storageModule.ref(storage, path)); }
             catch (error) { if (error?.code !== 'storage/object-not-found') throw error; }
@@ -319,6 +443,11 @@
           && String(current.email || '').trim().toLowerCase() === adminEmail;
         if (!uid || (!isOwner && !isAdmin)) throw new Error('Sign in to download this 3D mockup.');
         const assetPath = String(path || '');
+        const firestoreAsset = parseFirestoreAssetPath(uid, assetPath);
+        if (assetPath.startsWith('firestore://')) {
+          if (!firestoreAsset) throw new Error('This mockup file does not belong to your account.');
+          return downloadFirestoreAsset(uid, firestoreAsset.customizationId, firestoreAsset.assetName);
+        }
         if (!assetPath.startsWith(`users/${uid}/customizations/`)) throw new Error('This mockup file does not belong to your account.');
         const bytes = await storageModule.getBytes(storageModule.ref(storage, assetPath), 100 * 1024 * 1024);
         const type = assetPath.endsWith('.glb') ? 'model/gltf-binary'

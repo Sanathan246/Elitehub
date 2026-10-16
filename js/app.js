@@ -25,6 +25,53 @@
   EH.validEmail = (v) => /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(String(v).trim());
   EH.validPhone = (v) => /^(\+?91[\s-]?)?[6-9]\d{9}$/.test(String(v).replace(/[\s-]/g, ''));
 
+  /** Resolves with the Firebase API (js/firebase.js) once it has loaded, or null after `timeout` ms. */
+  EH.whenFirebase = (timeout = 15000) => new Promise((resolve) => {
+    if (window.EHFirebase) { resolve(window.EHFirebase); return; }
+    let timer = null;
+    const done = (event) => {
+      clearTimeout(timer);
+      document.removeEventListener('firebase:ready', done);
+      resolve((event && event.detail && event.detail.api) || window.EHFirebase || null);
+    };
+    document.addEventListener('firebase:ready', done);
+    timer = setTimeout(() => done(null), timeout);
+  });
+
+  /* Saved delivery details on this device. Each copy remembers which account it
+     belongs to ('' = entered while signed out), so a second person signing in on a
+     shared computer never sees or inherits the previous person's address. */
+  EH.localProfile = {
+    owner() { return String(EH.store.get('eh_profile_owner', '') || ''); },
+    /** The saved details if they belong to `uid` (or were entered while signed out), else null. */
+    read(uid = '') {
+      const profile = EH.store.get('eh_profile', null);
+      if (!profile || typeof profile !== 'object') return null;
+      const owner = EH.localProfile.owner();
+      return !owner || owner === (uid || '') ? profile : null;
+    },
+    write(profile, uid = '') {
+      const ok = EH.store.set('eh_profile', profile);
+      if (ok) EH.store.set('eh_profile_owner', uid || '');
+      return ok;
+    },
+    clear() { EH.store.remove('eh_profile'); EH.store.remove('eh_profile_owner'); },
+    /** Call when `uid` signs out: their details and cached orders stay in their account, not on this device. */
+    forget(uid) {
+      if (uid && EH.localProfile.owner() === uid) EH.localProfile.clear();
+      EH.store.remove('eh_orders');
+    }
+  };
+
+  /** Path of the current page relative to the site root (works under <base href="../">). */
+  EH.sitePath = () => {
+    const root = new URL('.', document.baseURI).pathname;
+    const here = location.pathname + location.search;
+    return here.startsWith(root) ? here.slice(root.length) : '';
+  };
+  /** Sign-in / sign-up link that returns the person to `next` (default: this page) afterwards. */
+  EH.authLink = (page = 'login.html', next = EH.sitePath()) => (next ? `${page}?next=${encodeURIComponent(next)}` : page);
+
   /* ---------------- icons ---------------- */
   const I = {
     search: '<circle cx="11" cy="11" r="7.5"/><path d="m20.5 20.5-4.2-4.2"/>',
@@ -444,7 +491,7 @@
     const box = EH.$('[data-cart-items]');
     if (!box) return;
     const t = EH.totals(items);
-    EH.$('[data-cart-count]').textContent = items.length ? `(${EH.cart.count()})` : '';
+    EH.$('[data-cart-count]').textContent = items.length ? `(${EH.cart.count(items)})` : '';
     const ship = EH.$('[data-ship]');
     const th = Number(C.freeShippingThreshold) || 0;
     if (!items.length) ship.hidden = true;
@@ -466,8 +513,8 @@
        return `<div class="cart-line">
          <a class="cart-thumb" href="${href}">${EH.thumbHTML(it)}</a>
          <div><h4>${EH.esc(it.name)}${it.custom ? '<span class="tag-custom">Custom</span>' : ''}</h4><div class="meta">${EH.esc(EH.optionMeta(it))}</div>
-           <div class="qty qty-sm"><button type="button" data-qty="-1" data-line="${lineId}" aria-label="Decrease">${EH.icon('minus')}</button><input type="number" value="${qty}" min="1" max="20" data-line-input="${lineId}" aria-label="Quantity"><button type="button" data-qty="1" data-line="${lineId}" aria-label="Increase">${EH.icon('plus')}</button></div></div>
-         <div><div class="price">${EH.money((Number(it.price) || 0) * qty)}</div><button type="button" class="line-remove" data-remove="${lineId}">${EH.icon('trash')} Remove</button></div>
+           <div class="qty qty-sm"><button type="button" data-cart-qty="-1" data-cart-line="${lineId}" aria-label="Decrease">${EH.icon('minus')}</button><input type="number" value="${qty}" min="1" max="20" data-line-input="${lineId}" aria-label="Quantity"><button type="button" data-cart-qty="1" data-cart-line="${lineId}" aria-label="Increase">${EH.icon('plus')}</button></div></div>
+         <div><div class="price">${EH.money((Number(it.price) || 0) * qty)}</div><button type="button" class="line-remove" data-cart-remove="${lineId}">${EH.icon('trash')} Remove</button></div>
        </div>`;
      }).join('');
     const foot = EH.$('[data-cart-foot]');
@@ -668,21 +715,33 @@
     try {
       let data = await EH.files.get(kind + ':' + customId);
       let record = null;
-      if (!data && ['mockup', 'details', 'preview', 'previewBlob', 'sourceModel'].includes(kind) && window.EHFirebase?.enabled) {
+      if (!data && ['print', 'mockup', 'details', 'preview', 'previewBlob', 'sourceModel'].includes(kind) && window.EHFirebase?.enabled) {
         const api = window.EHFirebase;
         await api.ready;
         const uid = ownerUid || api.currentUser?.uid;
         if (uid) {
           record = await api.getCustomization(uid, customId);
-          const asset = kind === 'previewBlob' || kind === 'preview' ? 'preview' : kind;
-          const path = record?.assets?.[asset];
-          if (path) data = await api.downloadCustomizationAsset(uid, path);
+          if (kind === 'print') {
+            /* The print file only lives in the customer's browser. On any other device,
+               take the artwork back out of the design details saved with the order. */
+            data = await printFromDetails(api, uid, record);
+            if (!data && record?.assets?.preview) data = await api.downloadCustomizationAsset(uid, record.assets.preview);
+          } else {
+            const asset = kind === 'previewBlob' || kind === 'preview' ? 'preview' : kind;
+            const path = record?.assets?.[asset];
+            if (path) data = await api.downloadCustomizationAsset(uid, path);
+          }
         }
       }
       if (!data) { EH.toast('That design file is no longer stored on this device or account.', { type: 'error' }); return; }
       const extension = kind === 'sourceModel'
         ? ((record?.sourceModelName || filename || '').split('.').pop() || 'glb').toLowerCase()
         : ({ mockup: 'glb', details: 'json', preview: 'png', previewBlob: 'png' }[kind] || 'png');
+      if (kind === 'print' && typeof data === 'string') {
+        const type = (data.match(/^data:image\/(png|jpe?g|webp|svg\+xml)/i) || [])[1] || 'png';
+        const ext = type.toLowerCase().replace('jpeg', 'jpg').replace('svg+xml', 'svg');
+        if (filename) filename = filename.replace(/\.[a-z0-9]+$/i, '.' + ext);
+      }
       const requestedName = filename || (kind === 'sourceModel' ? record?.sourceModelName : '');
       const downloadName = String(requestedName || `elitehub-design-${customId}-${kind}.${extension}`)
         .replace(/[\\/:*?"<>|]/g, '_').replace(/\.{2,}/g, '_').slice(0, 160);
@@ -692,6 +751,20 @@
       EH.toast(error.message || 'That design file could not be downloaded.', { type: 'error' });
     }
   };
+  async function printFromDetails(api, uid, record) {
+    if (!record?.assets?.details) return null;
+    try {
+      const blob = await api.downloadCustomizationAsset(uid, record.assets.details);
+      const details = JSON.parse(await blob.text());
+      const layers = Array.isArray(details?.state?.layers) ? details.state.layers : [];
+      const art = layers.find((layer) => layer && layer.visible !== false && layer.type === 'image' && /^data:image\//i.test(String(layer.src || '')));
+      return art ? art.src : null;
+    } catch (error) {
+      console.warn('Artwork could not be read from the design details.', error);
+      return null;
+    }
+  }
+
   /** Order line items with thumbnails + optional design-file buttons. */
   EH.orderItemsHTML = (items, withFiles) => (Array.isArray(items) ? items : []).map((it = {}) => {
     const qty = clampQty(it.qty);
@@ -804,10 +877,10 @@
       if (qa) { e.preventDefault(); EH.quickAdd(qa.dataset.quickAdd); }
       const sug = t.closest('[data-suggest]');
       if (sug) { const inp = EH.$('#searchOverlay input'); inp.value = sug.dataset.suggest; runSearch(inp.value); }
-      const q = t.closest('[data-qty]');
-      if (q) { const it = EH.cart.items().find((i) => i.lineId === q.dataset.line); if (it) EH.cart.setQty(it.lineId, it.qty + +q.dataset.qty); }
-      const rm = t.closest('[data-remove]');
-      if (rm) EH.cart.remove(rm.dataset.remove);
+      const q = t.closest('[data-cart-qty]');
+      if (q) { const it = EH.cart.items().find((i) => i.lineId === q.dataset.cartLine); if (it) EH.cart.setQty(it.lineId, clampQty(it.qty) + Number(q.dataset.cartQty)); }
+      const rm = t.closest('[data-cart-remove]');
+      if (rm) EH.cart.remove(rm.dataset.cartRemove);
       if (t.closest('[data-toggle-menu]')) {
         const nav = EH.$('#mobileNav');
         const btn = t.closest('[data-toggle-menu]');

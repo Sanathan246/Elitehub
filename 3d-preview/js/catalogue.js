@@ -92,7 +92,7 @@ function render() {
     cards.push(`
       <article class="p3c-card p3c-upload">
         <a class="p3c-media" href="3d-preview/customizer.html?start=upload">
-          <span class="p3c-upload-inner">${EH.icon('upload')}<b>Upload your own 3D model</b><span>GLB, GLTF, OBJ, STL or FBX, up to 50 MB. Add your design to it like any other product.</span></span>
+          <span class="p3c-upload-inner">${EH.icon('upload')}<b>Upload your own 3D model</b><span>GLB, GLTF, OBJ, STL or FBX, up to 20 MB. Add your design to it like any other product.</span></span>
         </a>
       </article>`);
   }

@@ -752,7 +752,7 @@ function buildFrame() {
 /* Uploaded 3D files                                                   */
 /* ------------------------------------------------------------------ */
 export const ACCEPTED_EXTENSIONS = ['glb', 'gltf', 'obj', 'stl', 'fbx'];
-export const MAX_UPLOAD_MB = 100;
+export const MAX_UPLOAD_MB = 20;
 
 export class ModelFileError extends Error {}
 

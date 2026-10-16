@@ -11,6 +11,22 @@ service cloud.firestore {
       && request.auth.token.email_verified == true;
   }
 
+  function customizationHasOrder(userId) {
+    return 'orderId' in resource.data
+      && resource.data.orderId is string
+      && resource.data.orderId.size() > 0
+      && exists(/databases/$(database)/documents/users/$(userId)/orders/$(resource.data.orderId));
+  }
+
+  function customizationHasOrderById(userId, customizationId) {
+    let customizationPath = /databases/$(database)/documents/users/$(userId)/customizations/$(customizationId);
+    return exists(customizationPath)
+      && 'orderId' in get(customizationPath).data
+      && get(customizationPath).data.orderId is string
+      && get(customizationPath).data.orderId.size() > 0
+      && exists(/databases/$(database)/documents/users/$(userId)/orders/$(get(customizationPath).data.orderId));
+  }
+
   function adminOrderUpdate() {
     return isAdmin()
       && (resource.data.status != 'Cancelled' || request.resource.data.status == 'Cancelled')
@@ -28,6 +44,15 @@ service cloud.firestore {
         .hasOnly(['status', 'cancelledAt', 'updatedAt']);
   }
 
+  /* New orders start unpaid: a customer can't create an order already marked
+     "Paid" or "Shipped". Payment is confirmed afterwards by customerConfirmPayment. */
+  function validNewOrder(userId, orderId) {
+    return isOwner(userId)
+      && request.resource.data.id == orderId
+      && request.resource.data.status in ['Placed', 'Payment pending']
+      && (!('paymentId' in request.resource.data) || request.resource.data.paymentId == '');
+  }
+
   function customerConfirmPayment(userId) {
     return isOwner(userId)
       && resource.data.status == 'Payment pending'
@@ -43,13 +68,53 @@ service cloud.firestore {
       allow read, write: if isOwner(userId);
 
       match /customizations/{customizationId} {
-        allow read, write: if isOwner(userId) || isAdmin();
+        allow read: if isOwner(userId) || isAdmin();
+        allow create: if isOwner(userId);
+        // Keep purchased design metadata and its file paths intact for fulfillment.
+        allow update, delete: if isAdmin() || (isOwner(userId) && !customizationHasOrder(userId));
+
+        match /assets/{assetName} {
+          allow read: if isOwner(userId) || isAdmin();
+          allow create, update: if isOwner(userId)
+            && !customizationHasOrderById(userId, customizationId)
+            && assetName in ['mockup', 'details', 'preview', 'sourceModel']
+            && request.resource.data.uploadId is string
+            && request.resource.data.uploadId.size() > 0
+            && request.resource.data.uploadId.size() <= 100
+            && request.resource.data.chunkCount is int
+            && request.resource.data.chunkCount > 0
+            && request.resource.data.chunkCount <= 150
+            && request.resource.data.size is int
+            && request.resource.data.size > 0
+            && ((assetName == 'sourceModel' && request.resource.data.size <= 20971520)
+              || (assetName != 'sourceModel' && request.resource.data.size <= 104857600))
+            && request.resource.data.contentType is string
+            && request.resource.data.contentType in ['model/gltf-binary', 'model/gltf+json', 'application/json', 'image/png', 'application/octet-stream'];
+          allow delete: if isAdmin() || (isOwner(userId) && !customizationHasOrderById(userId, customizationId));
+
+          match /chunks/{chunkId} {
+            allow read: if isOwner(userId) || isAdmin();
+            allow create, update: if isOwner(userId)
+              && !customizationHasOrderById(userId, customizationId)
+              && assetName in ['mockup', 'details', 'preview', 'sourceModel']
+              && request.resource.data.uploadId is string
+              && request.resource.data.uploadId.size() > 0
+              && request.resource.data.uploadId.size() <= 100
+              && request.resource.data.index is int
+              && request.resource.data.index >= 0
+              && request.resource.data.index < 150
+              && request.resource.data.chunk is bytes
+              && request.resource.data.chunk.size() <= 716800;
+            allow delete: if isAdmin() || (isOwner(userId) && !customizationHasOrderById(userId, customizationId));
+          }
+        }
       }
     }
 
     match /users/{userId}/orders/{orderId} {
       allow read: if isOwner(userId) || isAdmin();
-      allow create, delete: if isOwner(userId);
+      allow create: if validNewOrder(userId, orderId);
+      // No delete: orders are business records. Customers cancel instead.
       allow update: if customerCancelOrder(userId)
         || customerConfirmPayment(userId)
         || adminOrderUpdate();

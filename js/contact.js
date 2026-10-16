@@ -8,7 +8,9 @@
     const cards = [];
     if (C.whatsappNumber) cards.push(card(EH.waLink(`Hi ${C.brandName}!`), 'whatsapp', 'WhatsApp', 'Chat with us — fastest reply', true));
     if (C.email) cards.push(card('mailto:' + C.email, 'mail', 'Email', C.email));
-    if (C.phone) cards.push(card('tel:' + C.phone.replace(/[^\d+]/g, ''), 'phone', 'Call', C.phone));
+    // Hidden until a real number is set in js/config.js (the template ships with +91 00000 00000).
+    const phoneDigits = String(C.phone || '').replace(/\D/g, '').replace(/^91/, '');
+    if (phoneDigits.length >= 8 && !/^0+$/.test(phoneDigits)) cards.push(card('tel:' + C.phone.replace(/[^\d+]/g, ''), 'phone', 'Call', C.phone));
     if (C.social && C.social.instagram) cards.push(card(C.social.instagram, 'instagram', 'Instagram', 'See our latest drops & customer prints', true));
     cards.push(card('', 'clock', 'Working hours', C.hours || ''));
     if (C.address) cards.push(card('', 'pin', 'Studio', C.address));
@@ -21,7 +23,7 @@
       ['What kind of image should I upload for a custom design?', 'High-resolution images give the sharpest prints — ideally 1500 px wide or more. PNG files with a transparent background look best on clothing. In the design studio you can preview your product and download a print file before ordering.'],
       ['Do you take bulk or corporate orders?', 'Yes! We print team tees, event merchandise, corporate gifts and more. Send us a message with the product, quantity and your design, and we’ll share a quote.'],
       ['Which payment methods do you accept?', pays.length ? `We accept ${pays.join(', ')}.` : 'We’ll contact you to confirm payment after you place your order.'],
-      ['How do I track my order?', `Your order ID is shown on the confirmation screen and saved under My Orders on this device. Message us${C.whatsappNumber ? ' on WhatsApp' : ''} with your order ID any time for an update.`]
+      ['How do I track my order?', `Sign in and open My Orders to see your order’s progress, carrier and tracking number on any device. Your order ID is also on the confirmation screen; message us${C.whatsappNumber ? ' on WhatsApp' : ''} with it any time for an update.`]
     ];
     document.getElementById('faq').innerHTML = faqs.map(([q, a], i) => `<div class="acc-item ${i === 0 ? 'open' : ''}"><button class="acc-head" type="button" aria-expanded="${i === 0}">${EH.esc(q)} ${EH.icon('plus')}</button><div class="acc-body"><div><p>${EH.esc(a)}</p></div></div></div>`).join('');
 
@@ -42,9 +44,12 @@
       const btn = document.getElementById('contactBtn');
 
       if (C.web3formsKey) {
+        if (btn.disabled) return;
+        btn.disabled = true;
         btn.classList.add('is-loading');
         const r = await EH.sendForm(`Website enquiry: ${data.topic}`, data);
         btn.classList.remove('is-loading');
+        btn.disabled = false;
         if (r.ok) { form.reset(); note.className = 'form-note ok'; note.textContent = 'Thank you! Your message has been sent — we’ll get back to you soon.'; return; }
         note.className = 'form-note err';
         note.textContent = 'Sorry, your message could not be sent right now. Please try again or reach us directly using the details on this page.';

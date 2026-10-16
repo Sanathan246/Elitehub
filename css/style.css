@@ -547,7 +547,7 @@ a.contact-card:hover { border-color: var(--gold-line); transform: translateX(4px
 /* ---------- account ---------- */
 .account-access { padding-top: 0; }
 .account-auth { display: grid; grid-template-columns: minmax(0, 1.1fr) minmax(300px, .9fr); gap: 34px; align-items: center; background: radial-gradient(circle at 8% 0%, rgba(230, 191, 134, .09), transparent 44%), var(--card); }
-.account-auth-copy h2 { max-width: 560px; margin: 10px 0 14px; font-family: var(--font-display); font-size: clamp(30px, 3.6vw, 44px); line-height: 1.05; text-transform: uppercase; letter-spacing: .03em; }
+.account-auth-copy h2 { display: block; max-width: 560px; margin: 10px 0 14px; font-family: var(--font-display); font-size: clamp(30px, 3.6vw, 44px); line-height: 1.05; text-transform: uppercase; letter-spacing: .03em; }
 .account-auth-copy > .muted { max-width: 520px; line-height: 1.7; }
 .account-benefits { list-style: none; padding: 0; margin: 24px 0 0; display: grid; gap: 12px; color: var(--text-2); font-size: 13px; }
 .account-benefits li { display: flex; align-items: center; gap: 10px; }
@@ -766,7 +766,7 @@ input[type=range]::-moz-range-thumb { width: 16px; height: 16px; border-radius: 
   .menu-btn { display: inline-grid; }
   .brand-mono { height: 38px; }
   .brand-word { height: 20px; }
-  .mobile-nav { display: flex; flex-direction: column; position: fixed; top: var(--header-h); left: 0; right: 0; z-index: 59; background: rgba(8, 7, 11, 0.97); backdrop-filter: blur(16px); border-bottom: 1px solid var(--line); padding: 10px 20px 24px; transform: translateY(-120%); transition: transform .4s cubic-bezier(.2, .8, .2, 1); }
+  .mobile-nav { display: flex; flex-direction: column; position: fixed; top: calc(var(--header-h) + env(safe-area-inset-top, 0px)); left: 0; right: 0; z-index: 59; background: rgba(8, 7, 11, 0.97); backdrop-filter: blur(16px); border-bottom: 1px solid var(--line); padding: 10px 20px 24px; transform: translateY(-120%); transition: transform .4s cubic-bezier(.2, .8, .2, 1); }
   .mobile-nav.open { transform: none; }
   .mobile-nav a { padding: 15px 4px; border-bottom: 1px solid var(--line); font-family: var(--font-display); font-size: 24px; text-transform: uppercase; letter-spacing: .04em; }
   .mobile-nav a.active { color: var(--gold); }

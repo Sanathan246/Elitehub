@@ -19,6 +19,43 @@
   let firebaseApi = null;
   let busy = false;
 
+  /* ?next=checkout.html sends people back where they were once they are signed in.
+     Only same-site pages are accepted, and never the sign-in pages themselves. */
+  const nextTarget = (() => {
+    const raw = new URLSearchParams(location.search).get('next') || '';
+    if (!raw || /^[a-z][a-z0-9+.-]*:/i.test(raw) || /^[\\/]/.test(raw)) return '';
+    try {
+      const url = new URL(raw, document.baseURI);
+      if (url.origin !== location.origin || /(^|\/)(login|signup)(\.html)?$/i.test(url.pathname)) return '';
+      return url.href;
+    } catch (error) {
+      return '';
+    }
+  })();
+  const nextLabel = () => (/checkout/i.test(nextTarget) ? 'Continue to checkout' : 'Continue where you left off');
+  const goNext = () => { if (nextTarget) location.assign(nextTarget); };
+  if (nextTarget) {
+    const raw = new URLSearchParams(location.search).get('next');
+    document.querySelectorAll('.auth-switch a').forEach((link) => {
+      const page = (link.getAttribute('href') || '').split('?')[0];
+      link.setAttribute('href', `${page}?next=${encodeURIComponent(raw)}`);
+    });
+    const sessionLink = session && session.querySelector('a.btn');
+    if (sessionLink) { sessionLink.href = nextTarget; sessionLink.textContent = nextLabel(); }
+  }
+
+  /** True once Firebase is usable; waits briefly if it is still loading. */
+  const firebaseReady = async () => {
+    if (!firebaseApi) {
+      setNote('Connecting to your account…');
+      const api = await EH.whenFirebase(10000);
+      if (api) setupFirebase(api);
+    }
+    if (firebaseApi && firebaseApi.enabled) return true;
+    setFirebaseAvailability(firebaseApi || { enabled: false, reason: 'timeout' });
+    return false;
+  };
+
   const setNote = (message, type = '') => {
     note.textContent = message || '';
     note.className = `form-note${type ? ` ${type}` : ''}`;
@@ -89,7 +126,7 @@
   };
 
   const setFirebaseAvailability = (api) => {
-    firebaseApi = api;
+    firebaseApi = api && typeof api.subscribeAuth === 'function' ? api : null;
     const enabled = Boolean(api && api.enabled);
     form.querySelectorAll('input').forEach((input) => { input.disabled = !enabled; });
     submitButton.disabled = !enabled;
@@ -99,9 +136,11 @@
       setNote('');
       return;
     }
-    setNote(api && api.reason === 'initialization-failed'
-      ? 'Firebase could not load. Check your project configuration and refresh.'
-      : 'Firebase is not connected yet. Add your Firebase web app values in js/config.js to enable account access.');
+    setNote(!api || api.reason === 'timeout'
+      ? 'Account sign-in could not load. Check your connection and refresh the page.'
+      : api.reason === 'initialization-failed'
+        ? 'Firebase could not load. Check your project configuration and refresh.'
+        : 'Firebase is not connected yet. Add your Firebase web app values in js/config.js to enable account access.');
   };
 
   const renderAuthState = (user) => {
@@ -137,10 +176,7 @@
       result.first.focus();
       return;
     }
-    if (!firebaseApi || !firebaseApi.enabled) {
-      setNote('Firebase is not connected yet. Add your Firebase web app values in js/config.js to enable account access.');
-      return;
-    }
+    if (!(await firebaseReady())) return;
 
     setBusy(true);
     const email = emailInput.value.trim().toLowerCase();
@@ -158,6 +194,7 @@
         await firebaseApi.signIn(email, passwordInput.value);
         EH.toast('Welcome back to EliteHub');
       }
+      goNext();
     } catch (error) {
       setNote(errorMessage(error), 'err');
     } finally {
@@ -167,10 +204,7 @@
 
   if (googleButton) googleButton.addEventListener('click', async () => {
     if (busy) return;
-    if (!firebaseApi || !firebaseApi.enabled) {
-      setNote('Firebase is not connected yet. Add your Firebase web app values in js/config.js to enable account access.');
-      return;
-    }
+    if (!(await firebaseReady())) return;
     setBusy(true);
     setNote('');
     try {
@@ -184,6 +218,7 @@
       } else {
         EH.toast('Welcome back to EliteHub');
       }
+      goNext();
     } catch (error) {
       setNote(googleErrorMessage(error), 'err');
     } finally {
@@ -198,10 +233,7 @@
       emailInput.focus();
       return;
     }
-    if (!firebaseApi || !firebaseApi.enabled) {
-      setNote('Firebase is not connected yet. Add your Firebase web app values in js/config.js to enable account access.');
-      return;
-    }
+    if (!(await firebaseReady())) return;
     setBusy(true);
     try {
       await firebaseApi.ready;
@@ -217,8 +249,10 @@
   if (signOutButton) signOutButton.addEventListener('click', async () => {
     if (!firebaseApi || !firebaseApi.enabled || busy) return;
     setBusy(true);
+    const uid = firebaseApi.currentUser && firebaseApi.currentUser.uid;
     try {
       await firebaseApi.signOut();
+      EH.localProfile.forget(uid);
       setNote('You’ve been signed out.', 'ok');
     } catch (error) {
       setNote(errorMessage(error), 'err');
@@ -231,6 +265,7 @@
     document.addEventListener('firebase:ready', (event) => setupFirebase(event.detail && event.detail.api ? event.detail.api : window.EHFirebase));
     if (window.EHFirebase) setupFirebase(window.EHFirebase);
     renderAuthState(null);
+    EH.whenFirebase(15000).then((api) => { if (!api && !firebaseApi) setFirebaseAvailability({ enabled: false, reason: 'timeout' }); });
   };
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', ready, { once: true });
   else ready();

@@ -108,6 +108,8 @@ function selectDesignLayout(layout) {
 }
 let studio;
 let backgroundRemovalPipeline;
+/* Set when we navigate away on purpose (e.g. "Buy now"), so the unsaved-changes prompt stays quiet. */
+let leavingOnPurpose = false;
 
 async function init() {
   store.followAuth();
@@ -135,7 +137,7 @@ async function init() {
     syncSpin();
   });
 
-  window.addEventListener('beforeunload', (e) => { if (S.dirty) { e.preventDefault(); e.returnValue = ''; } });
+  window.addEventListener('beforeunload', (e) => { if (S.dirty && !leavingOnPurpose) { e.preventDefault(); e.returnValue = ''; } });
   document.addEventListener('keydown', onKeyDown);
   store.onChange(() => { if (S.previewId) renderActions(); });
 
@@ -188,6 +190,8 @@ async function init() {
   let demoImage = null;
   if (params.get('demo') === '1') {
     try { demoImage = sessionStorage.getItem('eh_demo_img'); } catch (e) { /* ignore unavailable storage */ }
+    // Larger uploads from the home page demo don't fit in sessionStorage; they wait in IndexedDB.
+    if (!demoImage) demoImage = await EH.files.get('demo:image');
   }
   if (demoImage && /^data:image\//i.test(demoImage)) {
     await studio.addLayer({ type: 'image', src: demoImage, name: 'Uploaded artwork', presetId: layoutPreset()?.id });
@@ -1093,7 +1097,7 @@ async function save() {
           <option value="__new">New folder…</option>
         </select></div>
       <div class="field" data-newfolder hidden><label for="saveNewFolder">New folder name</label><input class="input" id="saveNewFolder" maxlength="60" placeholder="e.g. Diwali drop"></div>
-      ${guest ? `<p class="form-note">You're not signed in, so this preview is saved on this device only. <a class="gold" href="login.html">Sign in</a> first to keep it with your account.</p>` : ''}
+      ${guest ? `<p class="form-note">You're not signed in, so this preview is saved on this device only. <a class="gold" href="${esc(EH.authLink('login.html'))}">Sign in</a> first to keep it with your account.</p>` : ''}
       <div class="preview-actions"><button class="btn btn-ghost btn-sm" type="button" data-close-modal>Cancel</button><button class="btn btn-gold btn-sm" type="submit">Save preview</button></div>
     </form>`);
   const sel = $('#saveFolder', m);
@@ -1255,12 +1259,15 @@ async function addToBag() {
     if (!ok) return;
     const visible = studio.layers.filter((l) => l.visible);
     const print = visible.find((l) => l.type === 'image') || visible[0];
+    const extras = [EH.files.put(`preview:${customId}`, image), EH.files.put(`3d:${customId}`, JSON.stringify(studio.getState()))];
     if (print) {
       const data = print.type === 'image' ? print.src : print._tex?.image?.toDataURL?.('image/png');
-      if (data) EH.files.put(`print:${customId}`, data).catch(() => {});
+      if (data) extras.push(EH.files.put(`print:${customId}`, data));
     }
-    EH.files.put(`preview:${customId}`, image).catch(() => {});
-    EH.files.put(`3d:${customId}`, JSON.stringify(studio.getState())).catch(() => {});
+    // Leaving the page can abort unfinished IndexedDB writes, so let them complete first.
+    await Promise.all(extras);
+    // The design now travels with the bag item, so leaving for checkout needs no "unsaved changes" prompt.
+    leavingOnPurpose = true;
     location.assign('checkout.html');
   } catch (error) {
     console.error('3D customization could not be added to the bag.', error);

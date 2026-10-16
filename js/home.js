@@ -27,12 +27,14 @@
     const scene = EH.designs['mountain-soul'].render({ u: 'demoScene', fill: true });
     const textIn = document.getElementById('demoText');
     const tee = document.getElementById('demoTee');
+    const isImage = (value) => typeof value === 'string' && /^data:image\/(png|jpe?g|webp|gif);base64,/i.test(value);
     let img = null;
     try { img = sessionStorage.getItem('eh_demo_img'); } catch (e) { /* ignore */ }
+    if (!isImage(img)) img = null;
     const draw = () => {
       const txt = EH.esc(textIn.value.trim());
       const art = img
-        ? `<image href="${img}" x="32" y="6" width="136" height="136" preserveAspectRatio="xMidYMid slice"/>`
+        ? `<image href="${EH.esc(img)}" x="32" y="6" width="136" height="136" preserveAspectRatio="xMidYMid slice"/>`
         : `<svg x="32" y="6" width="136" height="136" viewBox="0 0 200 200">${scene}</svg>`;
       tee.innerHTML = EH.mockup('tshirt', {
         color: 'black',
@@ -45,15 +47,21 @@
       if (textIn.value.trim()) studioParams.set('text', textIn.value.trim());
       cta.href = '3d-preview/customizer.html?' + studioParams.toString();
     };
-    if (img) document.getElementById('demoThumb').innerHTML = `<img src="${img}" alt="">`;
+    if (img) document.getElementById('demoThumb').innerHTML = `<img src="${EH.esc(img)}" alt="">`;
     textIn.addEventListener('input', draw);
     const file = document.getElementById('demoFile');
     document.getElementById('demoUpload').addEventListener('click', () => file.click());
     file.addEventListener('change', async () => {
       try {
         img = await EH.readImage(file.files[0], 900);
-        try { sessionStorage.setItem('eh_demo_img', img); } catch (e) { /* too big for session storage: preview still works */ }
-        document.getElementById('demoThumb').innerHTML = `<img src="${img}" alt="">`;
+        let stored = false;
+        try { sessionStorage.setItem('eh_demo_img', img); stored = true; } catch (e) { /* too big for session storage */ }
+        if (!stored) {
+          // Hand it to the 3D studio through IndexedDB instead, so "Customize Now" still carries it over.
+          try { sessionStorage.removeItem('eh_demo_img'); } catch (e) { /* ignore */ }
+          await EH.files.put('demo:image', img);
+        }
+        document.getElementById('demoThumb').innerHTML = `<img src="${EH.esc(img)}" alt="">`;
         document.getElementById('demoPill').textContent = 'Image uploaded';
         draw();
       } catch (err) { EH.toast(err.message, { type: 'error' }); }
