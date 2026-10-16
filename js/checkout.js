@@ -272,6 +272,7 @@
       const progressTrack = $('#checkoutProgressTrack');
       let progressHighWater = 0;
       let orderSaved = false;
+      let failureStage = 'order';
       const setProgress = (value, message, isError = false) => {
         if (!progress) return;
         progress.hidden = false;
@@ -357,6 +358,7 @@
           setStatus(hasCustom3d
             ? 'Preparing your custom 3D files and order details. Keep this page open.'
             : 'Saving your order. Please keep this page open.');
+          failureStage = hasCustom3d ? 'design-files' : 'order';
           const filePlan = await preparePurchasedCustomizations(orderUser, order);
           if (filePlan.totalBytes) {
             await filePlan.save(firebaseApi, (fraction, message, switchingStore) => {
@@ -364,6 +366,7 @@
               if (switchingStore) setStatus(message);
             });
           }
+          failureStage = 'order';
           setProgress(88, 'Saving your order and organizing its design files…');
           setStatus('Saving your order and attaching its GLB, design details, and preview.');
           await firebaseApi.saveOrder(orderUser.uid, order);
@@ -409,7 +412,9 @@
           : ['resource-exhausted', 'firestore/resource-exhausted'].includes(String(error?.code || ''))
             ? 'The free cloud storage quota is full. Your order was not placed; contact the store to clear space or choose another storage option.'
           : ['permission-denied', 'firestore/permission-denied'].includes(error?.code)
-            ? 'The store could not save your order. Please contact us so we can fix this.'
+            ? failureStage === 'design-files'
+              ? 'The store blocked the 3D file upload. Your order was not placed; please refresh and try again. If it keeps happening, contact the store.'
+              : 'The store could not save your order. Please contact us so we can fix this.'
             : (error?.message || 'Your order could not be saved. Please try again.');
         setStatus(message, 'err');
         setProgress(progressHighWater, orderSaved ? 'Order saved; payment needs attention.' : 'Order not placed. Please try again.', true);

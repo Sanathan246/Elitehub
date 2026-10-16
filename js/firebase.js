@@ -65,7 +65,9 @@
     const FIRESTORE_ASSET_MAX_BYTES = 100 * 1024 * 1024;
     const FIRESTORE_SOURCE_MODEL_MAX_BYTES = 20 * 1024 * 1024;
     const FIRESTORE_ASSET_BATCH_SIZE = 400;
-    const FIRESTORE_ASSET_UPLOAD_BATCH_SIZE = 8;
+    // Keep the per-batch rule access calls below Firestore's 20-call limit.
+    // Each chunk write may evaluate several cross-document checks in rules.
+    const FIRESTORE_ASSET_UPLOAD_BATCH_SIZE = 4;
 
     const firestoreAssetRef = (uid, customizationId, assetName) => firestoreModule.doc(
       db, 'users', uid, 'customizations', customizationId, 'assets', assetName
