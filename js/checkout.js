@@ -175,9 +175,9 @@
       });
     }
 
-    async function savePurchasedCustomizations(api, user, order) {
-      const items = order.items.filter((item) => item.custom3d);
-      for (const item of items) {
+    async function preparePurchasedCustomizations(user, order) {
+      const purchased = [];
+      for (const item of order.items.filter((entry) => entry.custom3d)) {
         item.customizationOwnerUid = user.uid;
         const [mockup, detailsFile, preview, sourceModel] = await Promise.all([
           EH.files.get(`mockup:${item.customId}`),
@@ -211,7 +211,7 @@
             summary: item.summary || '',
           },
         }, null, 2)], { type: 'application/json' });
-        await api.saveCustomization(user.uid, item.customId, {
+        const metadata = {
           name: item.name,
           product: item.name,
           kind: details.kind,
@@ -227,8 +227,36 @@
           previewId: item.previewId || '',
           orderId: order.id,
           sourceModelName: item.sourceModelName || '',
-        }, { mockup, details: purchasedDetails, preview, sourceModel });
+        };
+        const assets = { mockup, details: purchasedDetails, preview, sourceModel };
+        purchased.push({ item, metadata, assets, size: Object.values(assets).reduce((sum, asset) => sum + (asset instanceof Blob ? asset.size : 0), 0) });
       }
+      const totalBytes = purchased.reduce((sum, entry) => sum + entry.size, 0);
+      return {
+        totalBytes,
+        async save(api, onProgress) {
+          let completedBytes = 0;
+          for (const entry of purchased) {
+            const uploadedByAsset = new Map();
+            const paths = await api.saveCustomization(user.uid, entry.item.customId, entry.metadata, entry.assets, {
+              onProgress(event) {
+                if (event.phase === 'fallback') {
+                  onProgress(0, 'Using secure Firestore cloud file storage…', true);
+                  return;
+                }
+                const prior = uploadedByAsset.get(event.assetName) || 0;
+                const loaded = Math.min(Number(event.totalBytes) || Number(event.loadedBytes) || prior, Math.max(prior, Number(event.loadedBytes) || 0));
+                uploadedByAsset.set(event.assetName, loaded);
+                const itemBytes = Array.from(uploadedByAsset.values()).reduce((sum, bytes) => sum + bytes, 0);
+                onProgress(totalBytes ? Math.min(1, (completedBytes + itemBytes) / totalBytes) : 1, 'Saving your GLB and design files…');
+              }
+            });
+            entry.item.customizationFiles = paths;
+            completedBytes += entry.size;
+            onProgress(totalBytes ? completedBytes / totalBytes : 1, 'Your design files are saved.');
+          }
+        }
+      };
     }
 
     /* place order */
@@ -237,6 +265,28 @@
       if (placingOrder) return;
       placingOrder = true;
       const btn = $('#placeOrder');
+      const progress = $('#checkoutProgress');
+      const progressFill = $('#checkoutProgressFill');
+      const progressPercent = $('#checkoutProgressPercent');
+      const progressMessage = $('#checkoutProgressMessage');
+      const progressTrack = $('#checkoutProgressTrack');
+      let progressHighWater = 0;
+      let orderSaved = false;
+      const setProgress = (value, message, isError = false) => {
+        if (!progress) return;
+        progress.hidden = false;
+        progressHighWater = Math.max(progressHighWater, Math.min(100, Math.max(0, Math.round(value))));
+        if (progressFill) progressFill.style.width = `${progressHighWater}%`;
+        if (progressPercent) progressPercent.textContent = isError ? `Paused · ${progressHighWater}%` : `${progressHighWater}%`;
+        if (progressMessage && message) progressMessage.textContent = message;
+        if (progressTrack) progressTrack.setAttribute('aria-valuenow', String(progressHighWater));
+        progress.classList.toggle('is-error', isError);
+      };
+      const clearProgress = () => {
+        if (!progress) return;
+        progress.hidden = true;
+        progress.classList.remove('is-error');
+      };
       const whatsappWindow = payment === 'whatsapp' ? window.open('about:blank', '_blank') : null;
       const setStatus = (message, kind = '') => {
         if (!orderStatus) return;
@@ -248,6 +298,7 @@
       btn.classList.add('is-loading');
       btn.textContent = 'Connecting…';
       setStatus('Connecting to secure order storage. Please wait.');
+      setProgress(3, 'Connecting to secure order storage…');
       try {
         if (!firebaseApi) attachFirebase(await EH.whenFirebase(15000));
         if (!firebaseApi || !firebaseApi.enabled) throw new Error('Order storage could not load. Check your connection and refresh the page.');
@@ -258,6 +309,7 @@
           accountError.textContent = 'Sign in or create an account before placing an order.';
           accountGate.scrollIntoView({ block: 'center', behavior: 'smooth' });
           setStatus('Please sign in, then return here to place your order.', 'err');
+          clearProgress();
           if (whatsappWindow) whatsappWindow.close();
           return;
         }
@@ -268,6 +320,7 @@
           form.elements[bad[0]].focus();
           form.elements[bad[0]].scrollIntoView({ block: 'center', behavior: 'smooth' });
           setStatus('Complete the highlighted required fields to continue.', 'err');
+          clearProgress();
           EH.toast('Please check the highlighted fields', { type: 'error' });
           if (whatsappWindow) whatsappWindow.close();
           return;
@@ -275,6 +328,7 @@
         const items = EH.cart.items();
         if (!items.length) {
           setStatus('Your bag is empty. Add an item before placing an order.', 'err');
+          clearProgress();
           if (whatsappWindow) whatsappWindow.close();
           renderSummary();
           return;
@@ -292,32 +346,47 @@
            Retrying with the same bag and details pays for that order instead of creating another. */
         const signature = payment === 'online' ? JSON.stringify([orderUser.uid, customer, totals, items.map((it) => [it.key, it.qty, it.price])]) : '';
         const reuse = !!signature && !!pendingOnline && pendingOnline.signature === signature;
+        orderSaved = reuse;
         const order = reuse ? pendingOnline.order
           : { id: EH.orderId(), date: new Date().toISOString(), customer, items, totals, payment, status: payment === 'online' ? 'Payment pending' : 'Placed' };
 
         if (!reuse) {
-          btn.textContent = items.some((item) => item.custom3d) ? 'Saving design and order…' : 'Saving your order…';
-          setStatus(items.some((item) => item.custom3d)
-            ? 'Uploading your custom 3D files and saving the order. Keep this page open.'
+          const hasCustom3d = items.some((item) => item.custom3d);
+          btn.textContent = hasCustom3d ? 'Saving design and order…' : 'Saving your order…';
+          setProgress(7, hasCustom3d ? 'Preparing your design files…' : 'Saving your order…');
+          setStatus(hasCustom3d
+            ? 'Preparing your custom 3D files and order details. Keep this page open.'
             : 'Saving your order. Please keep this page open.');
-          await savePurchasedCustomizations(firebaseApi, orderUser, order);
+          const filePlan = await preparePurchasedCustomizations(orderUser, order);
+          if (filePlan.totalBytes) {
+            await filePlan.save(firebaseApi, (fraction, message, switchingStore) => {
+              setProgress(8 + fraction * 77, message);
+              if (switchingStore) setStatus(message);
+            });
+          }
+          setProgress(88, 'Saving your order and organizing its design files…');
+          setStatus('Saving your order and attaching its GLB, design details, and preview.');
           await firebaseApi.saveOrder(orderUser.uid, order);
+          orderSaved = true;
+          setProgress(94, 'Order and design files saved.');
           if (payment === 'online') pendingOnline = { signature, order };
         }
         if (payment === 'online') {
           btn.textContent = 'Opening secure payment…';
+          setProgress(orderSaved ? 96 : 94, 'Order saved. Opening secure payment…');
           setStatus(reuse
             ? 'Your order is already saved. Complete payment in the secure window.'
             : 'Your order and design files are saved. Complete payment in the secure window.');
           order.paymentId = await payOnline(order);
           order.status = 'Paid';
           try {
-            await firebaseApi.saveOrder(orderUser.uid, order);
+            await firebaseApi.confirmPayment(orderUser.uid, order.id, order.paymentId);
           } catch (error) {
             console.warn('Paid order status could not be synced to Firebase.', error);
             EH.toast('Payment succeeded, but the order update could not sync. Please contact us with your order number.', { type: 'error', duration: 6000 });
           }
           pendingOnline = null;
+          setProgress(100, 'Payment complete. Your order is placed.');
           finalize(order);
           return;
         }
@@ -330,20 +399,20 @@
             EH.toast('Order saved. Allow pop-ups to open WhatsApp and send the order details.', { type: 'error', duration: 5000 });
           }
         }
+        setProgress(100, 'Your order is placed.');
         finalize(order);
       } catch (error) {
         if (whatsappWindow) whatsappWindow.close();
         if (error.message !== 'Payment was cancelled — your bag is still saved.') console.error('Order could not be placed.', error);
-        const message = ['storage/bucket-not-found', 'storage/no-default-bucket'].includes(String(error?.code || ''))
-          ? 'Custom 3D ordering is not available yet because the store has not finished setting up Firebase Storage. Your order was not placed.'
-          : String(error?.code || '').startsWith('storage/')
-            ? 'The store could not save your 3D design files. Your order was not placed; please contact the store about its upload settings.'
+        const message = String(error?.code || '').startsWith('storage/')
+          ? 'The store could not save your 3D design files to cloud storage. Your order was not placed; please try again later.'
           : ['resource-exhausted', 'firestore/resource-exhausted'].includes(String(error?.code || ''))
             ? 'The free cloud storage quota is full. Your order was not placed; contact the store to clear space or choose another storage option.'
           : ['permission-denied', 'firestore/permission-denied'].includes(error?.code)
             ? 'The store could not save your order. Please contact us so we can fix this.'
             : (error?.message || 'Your order could not be saved. Please try again.');
         setStatus(message, 'err');
+        setProgress(progressHighWater, orderSaved ? 'Order saved; payment needs attention.' : 'Order not placed. Please try again.', true);
         EH.toast(message, { type: 'error', duration: 6500 });
       } finally {
         placingOrder = false;

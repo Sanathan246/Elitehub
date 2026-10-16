@@ -1,7 +1,10 @@
 /* EliteHub - Firebase Authentication and Firestore account data */
 (async function () {
   const SDK_VERSION = '12.19.0';
-  const config = window.EH_CONFIG && window.EH_CONFIG.firebase ? window.EH_CONFIG.firebase : {};
+  const savedFirebaseConfig = window.EH_CONFIG && window.EH_CONFIG.firebase ? window.EH_CONFIG.firebase : {};
+  const useFirestoreAssetFallback = savedFirebaseConfig.useFirestoreAssetFallback === true;
+  const config = Object.assign({}, savedFirebaseConfig);
+  delete config.useFirestoreAssetFallback;
   const required = ['apiKey', 'authDomain', 'projectId', 'appId'];
   const missing = required.filter((key) => !String(config[key] || '').trim());
 
@@ -20,6 +23,7 @@
     loadProfile() { return Promise.resolve(null); },
     clearProfile() { return Promise.resolve(); },
     saveOrder() { return Promise.reject(unavailableError()); },
+    confirmPayment() { return Promise.reject(unavailableError()); },
     listOrders() { return Promise.resolve([]); },
     subscribeOrders() { return () => {}; },
     cancelOrder() { return Promise.reject(unavailableError()); },
@@ -61,6 +65,7 @@
     const FIRESTORE_ASSET_MAX_BYTES = 100 * 1024 * 1024;
     const FIRESTORE_SOURCE_MODEL_MAX_BYTES = 20 * 1024 * 1024;
     const FIRESTORE_ASSET_BATCH_SIZE = 400;
+    const FIRESTORE_ASSET_UPLOAD_BATCH_SIZE = 8;
 
     const firestoreAssetRef = (uid, customizationId, assetName) => firestoreModule.doc(
       db, 'users', uid, 'customizations', customizationId, 'assets', assetName
@@ -85,7 +90,7 @@
       }
     }
 
-    async function uploadFirestoreAsset(uid, customizationId, assetName, blob, contentType) {
+    async function uploadFirestoreAsset(uid, customizationId, assetName, blob, contentType, onProgress) {
       if (!(blob instanceof Blob) || !blob.size) throw new Error(`The ${assetName} file could not be prepared.`);
       if (assetName === 'sourceModel' && blob.size > FIRESTORE_SOURCE_MODEL_MAX_BYTES) throw new Error('Uploaded 3D models must be 20 MB or smaller.');
       if (blob.size > FIRESTORE_ASSET_MAX_BYTES) throw new Error('A 3D design file is larger than the 100 MB free-storage fallback limit.');
@@ -94,9 +99,9 @@
       const bytes = new Uint8Array(await blob.arrayBuffer());
       const chunkCount = Math.ceil(bytes.byteLength / FIRESTORE_ASSET_CHUNK_BYTES);
 
-      for (let offset = 0; offset < chunkCount; offset += FIRESTORE_ASSET_BATCH_SIZE) {
+      for (let offset = 0; offset < chunkCount; offset += FIRESTORE_ASSET_UPLOAD_BATCH_SIZE) {
         const batch = firestoreModule.writeBatch(db);
-        const end = Math.min(chunkCount, offset + FIRESTORE_ASSET_BATCH_SIZE);
+        const end = Math.min(chunkCount, offset + FIRESTORE_ASSET_UPLOAD_BATCH_SIZE);
         for (let index = offset; index < end; index += 1) {
           const startByte = index * FIRESTORE_ASSET_CHUNK_BYTES;
           const chunk = bytes.slice(startByte, Math.min(bytes.byteLength, startByte + FIRESTORE_ASSET_CHUNK_BYTES));
@@ -108,6 +113,10 @@
           });
         }
         await batch.commit();
+        if (typeof onProgress === 'function') {
+          const uploadedChunks = Math.min(chunkCount, end);
+          onProgress({ assetName, loadedBytes: Math.min(bytes.byteLength, uploadedChunks * FIRESTORE_ASSET_CHUNK_BYTES), totalBytes: bytes.byteLength, transport: 'firestore' });
+        }
       }
 
       await firestoreModule.setDoc(assetRef, {
@@ -153,6 +162,11 @@
         /* Images and local-only IDs stay in localStorage/IndexedDB. Keeping them
            out of Firestore prevents large custom previews from hitting the doc limit. */
         const { image, key, lineId, sourceModelKey, ...cloudItem } = item;
+        if (cloudItem.customizationFiles && typeof cloudItem.customizationFiles === 'object') {
+          cloudItem.customizationFiles = Object.fromEntries(['mockup', 'details', 'preview', 'sourceModel']
+            .filter((assetName) => typeof cloudItem.customizationFiles[assetName] === 'string')
+            .map((assetName) => [assetName, cloudItem.customizationFiles[assetName]]));
+        }
         return cloudItem;
       }) : [];
       return {
@@ -241,11 +255,61 @@
         if (!uid) return Promise.reject(new Error('A signed-in user is required.'));
         if (!order || !order.id) return Promise.reject(new Error('An order ID is required.'));
         const data = cleanOrder(order);
-        return firestoreModule.setDoc(
-          firestoreModule.doc(db, 'users', uid, 'orders', data.id),
-          Object.assign(data, { updatedAt: firestoreModule.serverTimestamp() }),
-          { merge: true }
-        );
+        const validFilesFor = (customizationId, files) => {
+          if (!/^[A-Za-z0-9_-]{1,120}$/.test(customizationId) || !files || typeof files !== 'object') return false;
+          const allowed = ['mockup', 'details', 'preview', 'sourceModel'];
+          if (!['mockup', 'details', 'preview'].every((name) => typeof files[name] === 'string')
+            || Object.keys(files).some((name) => !allowed.includes(name))) return false;
+          return Object.entries(files).every(([name, path]) => {
+            const firestorePath = parseFirestoreAssetPath(uid, path);
+            if (firestorePath) return firestorePath.customizationId === customizationId && firestorePath.assetName === name;
+            const base = `users/${uid}/customizations/${customizationId}/`;
+            const file = path.startsWith(base) ? path.slice(base.length) : '';
+            const allowedNames = {
+              mockup: ['mockup.glb'], details: ['details.json'], preview: ['preview.png'],
+              sourceModel: ['source-model.glb', 'source-model.gltf', 'source-model.obj', 'source-model.stl', 'source-model.fbx']
+            };
+            return allowedNames[name].includes(file);
+          });
+        };
+        const batch = firestoreModule.writeBatch(db);
+        const orderRef = firestoreModule.doc(db, 'users', uid, 'orders', data.id);
+        batch.set(orderRef, Object.assign(data, { updatedAt: firestoreModule.serverTimestamp() }));
+        const manifestIds = new Set();
+        data.items.filter((item) => item.custom3d).forEach((item) => {
+          const customizationId = String(item.customId || '');
+          if (item.customizationOwnerUid !== uid || !validFilesFor(customizationId, item.customizationFiles)) {
+            throw new Error(`The 3D files for ${item.name || 'your custom product'} are not ready to attach to this order.`);
+          }
+          if (manifestIds.has(customizationId)) return;
+          manifestIds.add(customizationId);
+          const manifestRef = firestoreModule.doc(db, 'users', uid, 'orders', data.id, 'customizations', customizationId);
+          batch.set(manifestRef, {
+            id: customizationId,
+            orderId: data.id,
+            ownerUid: uid,
+            name: String(item.name || 'Custom 3D product').slice(0, 120),
+            productType: String(item.type || '').slice(0, 40),
+            quantity: Math.max(1, Math.min(20, Number(item.qty) || 1)),
+            unitPrice: Math.max(0, Number(item.price) || 0),
+            color: String(item.color || '').slice(0, 40),
+            size: String(item.size || '').slice(0, 40),
+            model: String(item.model || '').slice(0, 80),
+            summary: String(item.summary || '').slice(0, 1000),
+            sourceModelName: String(item.sourceModelName || '').slice(0, 160),
+            files: item.customizationFiles,
+            createdAt: firestoreModule.serverTimestamp()
+          });
+        });
+        return batch.commit();
+      },
+      confirmPayment(uid, orderId, paymentId) {
+        if (!uid || !orderId || !paymentId) return Promise.reject(new Error('A customer, order ID, and payment reference are required.'));
+        return firestoreModule.updateDoc(firestoreModule.doc(db, 'users', uid, 'orders', orderId), {
+          status: 'Paid',
+          paymentId: String(paymentId),
+          updatedAt: firestoreModule.serverTimestamp()
+        });
       },
       listOrders(uid) {
         if (!uid) return Promise.resolve([]);
@@ -310,7 +374,7 @@
         data.updatedAt = firestoreModule.serverTimestamp();
         return firestoreModule.updateDoc(firestoreModule.doc(db, 'users', uid, 'orders', orderId), data);
       },
-      async saveCustomization(uid, id, metadata = {}, assets = {}) {
+      async saveCustomization(uid, id, metadata = {}, assets = {}, options = {}) {
         if (!uid || !auth.currentUser || auth.currentUser.uid !== uid) throw new Error('Sign in to save this 3D mockup to your account.');
         const customizationId = String(id || '');
         if (!/^[A-Za-z0-9_-]{1,120}$/.test(customizationId)) throw new Error('This customization ID is invalid. Save the preview again.');
@@ -335,31 +399,41 @@
           specs.sourceModel = sourceSpecs[ext];
         }
         const paths = {};
-        let storageBucketMissing = false;
-        try {
-          await Promise.all(Object.entries(specs).map(async ([key, [filename, contentType]]) => {
-            const blob = assets[key];
-            if (!(blob instanceof Blob) || !blob.size) throw new Error(`The ${key} file could not be prepared.`);
-            if (key === 'sourceModel' && blob.size > FIRESTORE_SOURCE_MODEL_MAX_BYTES) throw new Error('Uploaded 3D models must be 20 MB or smaller.');
-            if (blob.size > FIRESTORE_ASSET_MAX_BYTES) throw new Error(`The ${filename} file is larger than the 100 MB upload limit.`);
-            const path = `${base}/${filename}`;
-            const task = storageModule.uploadBytesResumable(storageModule.ref(storage, path), blob, {
-              contentType,
-              customMetadata: { ownerUid: uid, customizationId }
-            });
-            await new Promise((resolve, reject) => {
-              task.on('state_changed', () => {}, reject, resolve);
-            });
-            paths[key] = path;
-          }));
-        } catch (error) {
-          if (!['storage/bucket-not-found', 'storage/no-default-bucket', 'storage/unauthorized'].includes(String(error?.code || ''))) throw error;
-          storageBucketMissing = true;
-        }
-        if (storageBucketMissing) {
+        const onProgress = typeof options.onProgress === 'function' ? options.onProgress : null;
+        const saveToFirestore = async () => {
+          if (onProgress) onProgress({ phase: 'fallback', transport: 'firestore' });
           await Promise.all(Object.entries(specs).map(async ([key, [, contentType]]) => {
-            paths[key] = await uploadFirestoreAsset(uid, customizationId, key, assets[key], contentType);
+            paths[key] = await uploadFirestoreAsset(uid, customizationId, key, assets[key], contentType, onProgress);
           }));
+        };
+        if (useFirestoreAssetFallback) {
+          await saveToFirestore();
+        } else {
+          let storageBucketMissing = false;
+          try {
+            await Promise.all(Object.entries(specs).map(async ([key, [filename, contentType]]) => {
+              const blob = assets[key];
+              if (!(blob instanceof Blob) || !blob.size) throw new Error(`The ${key} file could not be prepared.`);
+              if (key === 'sourceModel' && blob.size > FIRESTORE_SOURCE_MODEL_MAX_BYTES) throw new Error('Uploaded 3D models must be 20 MB or smaller.');
+              if (blob.size > FIRESTORE_ASSET_MAX_BYTES) throw new Error(`The ${filename} file is larger than the 100 MB upload limit.`);
+              const path = `${base}/${filename}`;
+              const task = storageModule.uploadBytesResumable(storageModule.ref(storage, path), blob, {
+                contentType,
+                customMetadata: { ownerUid: uid, customizationId }
+              });
+              await new Promise((resolve, reject) => {
+                task.on('state_changed', (snapshot) => {
+                  if (onProgress) onProgress({ assetName: key, loadedBytes: snapshot.bytesTransferred, totalBytes: snapshot.totalBytes, transport: 'storage' });
+                }, reject, resolve);
+              });
+              paths[key] = path;
+            }));
+          } catch (error) {
+            const fallbackCodes = ['storage/bucket-not-found', 'storage/no-default-bucket', 'storage/project-not-found', 'storage/unauthorized', 'storage/unknown'];
+            if (!fallbackCodes.includes(String(error?.code || ''))) throw error;
+            storageBucketMissing = true;
+          }
+          if (storageBucketMissing) await saveToFirestore();
         }
         const data = {
           id: customizationId,

@@ -31,6 +31,9 @@ window.EH_CONFIG = {
     authDomain: "elitehub-f33fd.firebaseapp.com",
     projectId: "elitehub-f33fd",
     storageBucket: "elitehub-f33fd.firebasestorage.app",
+    /* This project has no active Firebase Storage bucket. Keep customer GLBs in
+       the existing Firestore chunk store until a bucket is provisioned. */
+    useFirestoreAssetFallback: true,
     messagingSenderId: "46946688789",
     appId: "1:46946688789:web:5d93a71294514c6675d31c",
     measurementId: "G-05GPQ5ZGQC"

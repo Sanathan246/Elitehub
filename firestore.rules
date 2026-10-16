@@ -53,6 +53,39 @@ service cloud.firestore {
       && (!('paymentId' in request.resource.data) || request.resource.data.paymentId == '');
   }
 
+  function validOrderAssetPath(userId, customizationId, assetName, path) {
+    let storageBase = 'users/' + userId + '/customizations/' + customizationId + '/';
+    return path is string && (
+      path == 'firestore://' + userId + '/' + customizationId + '/' + assetName
+      || (assetName == 'mockup' && path == storageBase + 'mockup.glb')
+      || (assetName == 'details' && path == storageBase + 'details.json')
+      || (assetName == 'preview' && path == storageBase + 'preview.png')
+      || (assetName == 'sourceModel' && path in [
+        storageBase + 'source-model.glb', storageBase + 'source-model.gltf',
+        storageBase + 'source-model.obj', storageBase + 'source-model.stl',
+        storageBase + 'source-model.fbx'
+      ])
+    );
+  }
+
+  function validOrderCustomization(userId, orderId, customizationId) {
+    let orderPath = /databases/$(database)/documents/users/$(userId)/orders/$(orderId);
+    let files = request.resource.data.files;
+    return isOwner(userId)
+      && existsAfter(orderPath)
+      && getAfter(orderPath).data.id == orderId
+      && request.resource.data.id == customizationId
+      && request.resource.data.orderId == orderId
+      && request.resource.data.ownerUid == userId
+      && files is map
+      && files.keys().hasOnly(['mockup', 'details', 'preview', 'sourceModel'])
+      && files.keys().hasAll(['mockup', 'details', 'preview'])
+      && validOrderAssetPath(userId, customizationId, 'mockup', files.mockup)
+      && validOrderAssetPath(userId, customizationId, 'details', files.details)
+      && validOrderAssetPath(userId, customizationId, 'preview', files.preview)
+      && (!('sourceModel' in files) || validOrderAssetPath(userId, customizationId, 'sourceModel', files.sourceModel));
+  }
+
   function customerConfirmPayment(userId) {
     return isOwner(userId)
       && resource.data.status == 'Payment pending'
@@ -118,6 +151,12 @@ service cloud.firestore {
       allow update: if customerCancelOrder(userId)
         || customerConfirmPayment(userId)
         || adminOrderUpdate();
+
+      match /customizations/{customizationId} {
+        allow read: if isOwner(userId) || isAdmin();
+        allow create: if validOrderCustomization(userId, orderId, customizationId);
+        allow update, delete: if false;
+      }
     }
 
     match /{path=**}/orders/{orderId} {

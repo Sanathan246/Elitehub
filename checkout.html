@@ -70,6 +70,10 @@
           <p class="form-note" id="couponNote" style="margin:-6px 0 12px"></p>
           <div id="sumTotals"></div>
           <button class="btn btn-gold btn-block" type="submit" form="checkoutForm" id="placeOrder" style="margin-top:18px">Place Order</button>
+          <div class="checkout-progress" id="checkoutProgress" hidden>
+            <div class="checkout-progress-heading"><span id="checkoutProgressMessage">Preparing your order…</span><strong id="checkoutProgressPercent">0%</strong></div>
+            <div class="checkout-progress-track" id="checkoutProgressTrack" role="progressbar" aria-label="Order placement progress" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0"><span id="checkoutProgressFill"></span></div>
+          </div>
           <p class="form-note" id="checkoutOrderStatus" role="status" aria-live="polite"></p>
           <p class="secure-note"><i data-icon="lock"></i> Your details are safe with us</p>
         </div>
