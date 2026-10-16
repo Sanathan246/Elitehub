@@ -530,7 +530,7 @@ function renderProduct() {
 /* ------------------------------------------------------------------ */
 function renderDesign() {
   const el = $('#panel-design');
-  el.innerHTML = '<p class="p3d-note">Use the layout bar above the preview to choose Front, Back or Sleeves, add text or artwork, and save your layout. Drag a design on the product to move it; use an edge handle to stretch one way or a corner handle to stretch both ways.</p>' +
+  el.innerHTML = '<p class="p3d-note">Choose Front, Back or Sleeves, then drag the design or its handles to position and scale it. Larger prints can wrap over the outer sides of curved products; the original image ratio stays controlled by the resize handles.</p>' +
     '<div class="p3d-layer-head"><h3 class="p3d-h">Layers</h3><span class="muted" id="layerCount"></span></div>' +
     '<ul class="p3d-layers" id="layerList"></ul>' +
     '<div id="layerEditor"></div>';
@@ -595,7 +595,7 @@ function renderLayerEditor(soft = false) {
           <button class="btn btn-outline btn-sm" type="button" data-layer-act="remove-background">${icon('sparkles')} Remove background (AI)</button>
           ${l.originalSrc ? `<button class="btn btn-ghost btn-sm" type="button" data-layer-act="restore-image">Restore original</button>` : ''}
         </div>
-        <p class="p3d-note" data-background-status>Runs in your browser. Use an edge handle to stretch one way or a corner handle to stretch both ways.</p>` : ''}
+        <p class="p3d-note" data-background-status>Best with one clear subject against a distinct background. Your original is kept so you can restore it.</p>` : ''}
       <div class="opt-block p3d-opt"><div class="opt-label"><span>Position</span></div>
         <div class="p3d-chips">${presets.map((p) => `<button type="button" class="chip-btn" data-preset="${p.id}" aria-pressed="${p.id === l.presetId}">${esc(p.label)}</button>`).join('')}</div>
         <p class="p3d-note">Or drag the artwork on the model.</p>
@@ -655,7 +655,7 @@ async function removeImageBackground(layerId, button) {
   try {
     if (!backgroundRemovalPipeline) {
       backgroundRemovalPipeline = import('https://cdn.jsdelivr.net/npm/@huggingface/transformers@3.7.2')
-        .then(({ pipeline }) => pipeline('background-removal', 'Xenova/modnet', {
+        .then(({ pipeline }) => pipeline('background-removal', 'xrds/isnet-general-onnx-int8', {
           dtype: 'q8',
           progress_callback: (event) => {
             const progress = Number(event.progress);
@@ -670,8 +670,19 @@ async function removeImageBackground(layerId, button) {
     const remover = await backgroundRemovalPipeline;
     if (status) status.textContent = 'Removing the background…';
     const output = await remover(layer.src);
-    if (!output?.[0]) throw new Error('The AI model did not return a cutout.');
-    const blob = await output[0].toBlob();
+    const cutout = Array.isArray(output) ? output[0] : output;
+    if (!cutout || typeof cutout.toBlob !== 'function' || !cutout.data || cutout.channels < 4) {
+      throw new Error('The AI model did not return a transparent cutout. Your original image is unchanged.');
+    }
+    let visiblePixels = 0;
+    const pixels = cutout.width * cutout.height;
+    for (let i = cutout.channels - 1; i < cutout.data.length; i += cutout.channels) {
+      if (cutout.data[i] > 16) visiblePixels++;
+    }
+    if (!pixels || visiblePixels / pixels < 0.005) {
+      throw new Error('The subject was not detected clearly, so your original image was kept. Try an image with a clearer background.');
+    }
+    const blob = await cutout.toBlob();
     if (!blob || !blob.size) throw new Error('The AI model returned an empty image.');
     const src = await new Promise((resolve, reject) => {
       const reader = new FileReader();
@@ -685,7 +696,7 @@ async function removeImageBackground(layerId, button) {
     EH.toast('Background removed. You can restore the original image anytime.');
   } catch (error) {
     console.error('In-browser background removal failed.', error);
-    if (status) status.textContent = 'Background removal failed. Check your connection and try again.';
+    if (status) status.textContent = error.message || 'Background removal failed. Your original image is unchanged.';
     EH.toast(error.message || 'Background removal failed. Please try again.', { type: 'error', duration: 6000 });
   } finally {
     if (button.isConnected) button.disabled = false;

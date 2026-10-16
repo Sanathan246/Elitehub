@@ -110,30 +110,163 @@ async function garmentMesh(kind) {
   g.computeVertexNormals();
   g.computeBoundingBox();
   g.computeBoundingSphere();
-  const entry = { geometry: g, presets: MESH.presets };
+  const entry = { ...splitGarmentGeometry(g, kind, MESH.presets), presets: MESH.presets };
   garmentCache.set(kind, entry);
   return entry;
 }
 
+function splitGarmentGeometry(geometry, kind, presets) {
+  const leftPreset = presets.find((p) => p.id === 'sleeveL');
+  const rightPreset = presets.find((p) => p.id === 'sleeveR');
+  if (!['tee', 'longsleeve', 'crewneck', 'hoodie'].includes(kind) || !leftPreset || !rightPreset) {
+    return { parts: [{ id: 'body', geometry }], seams: null };
+  }
+
+  // Follow the curved armhole and sleeve underside instead of cutting a
+  // vertical slice through the torso. Each sleeve remains its own print mesh.
+  const shortSleeve = kind === 'tee';
+  const seamCurve = shortSleeve
+    ? [[-0.5, 0.5], [0.06, 0.4], [0.10, 0.35], [0.14, 0.32], [0.18, 0.30], [0.22, 0.28], [0.26, 0.26], [0.30, 0.25], [0.34, 0.25], [0.38, 0.28], [0.43, 0.34], [0.5, 0.5]]
+    : [[-0.2, 0.68], [-0.16, 0.64], [-0.12, 0.60], [-0.08, 0.55], [-0.04, 0.50], [0, 0.46], [0.04, 0.43], [0.08, 0.40], [0.12, 0.37], [0.16, 0.34], [0.20, 0.31], [0.24, 0.29], [0.28, 0.27], [0.32, 0.26], [0.36, 0.27], [0.40, 0.33], [0.46, 0.5]];
+  const sleeveEdgeAt = (y) => {
+    if (y <= seamCurve[0][0]) return seamCurve[0][1];
+    for (let i = 1; i < seamCurve.length; i++) {
+      const [y1, x1] = seamCurve[i];
+      const [y0, x0] = seamCurve[i - 1];
+      if (y <= y1) return x0 + (x1 - x0) * (y - y0) / (y1 - y0);
+    }
+    return seamCurve[seamCurve.length - 1][1];
+  };
+  const planes = [
+    { id: 'sleeveL', side: 1 },
+    { id: 'sleeveR', side: -1 },
+  ];
+
+  const position = geometry.getAttribute('position');
+  const normal = geometry.getAttribute('normal');
+  const index = geometry.index;
+  const buffers = Object.fromEntries(['body', 'sleeveL', 'sleeveR'].map((id) => [id, { positions: [], normals: [] }]));
+  const seamSegments = [];
+  const seamKeys = new Set();
+
+  const distance = (vertex, plane) => plane.side * vertex.position[0] - sleeveEdgeAt(vertex.position[1]);
+  const clip = (polygon, plane, keepPositive) => {
+    if (!polygon.length) return [];
+    const out = [];
+    for (let i = 0; i < polygon.length; i++) {
+      const a = polygon[i];
+      const b = polygon[(i + 1) % polygon.length];
+      const da = distance(a, plane), db = distance(b, plane);
+      const insideA = keepPositive ? da >= -1e-8 : da <= 1e-8;
+      const insideB = keepPositive ? db >= -1e-8 : db <= 1e-8;
+      if (insideA) out.push(a);
+      if (insideA !== insideB) {
+        const t = da / (da - db);
+        const p = a.position.map((value, axis) => value + (b.position[axis] - value) * t);
+        const n = a.normal.map((value, axis) => value + (b.normal[axis] - value) * t);
+        const length = Math.hypot(...n) || 1;
+        out.push({ position: p, normal: n.map((value) => value / length) });
+      }
+    }
+    return out;
+  };
+  const addPolygon = (polygon, target) => {
+    for (let i = 1; i < polygon.length - 1; i++) {
+      const tri = [polygon[0], polygon[i], polygon[i + 1]];
+      const [a, b, c] = tri.map((v) => v.position);
+      const ab = [b[0] - a[0], b[1] - a[1], b[2] - a[2]];
+      const ac = [c[0] - a[0], c[1] - a[1], c[2] - a[2]];
+      const area2 = Math.hypot(ab[1] * ac[2] - ab[2] * ac[1], ab[2] * ac[0] - ab[0] * ac[2], ab[0] * ac[1] - ab[1] * ac[0]);
+      if (area2 < 1e-10) continue;
+      tri.forEach((vertex) => {
+        target.positions.push(...vertex.position);
+        target.normals.push(...vertex.normal);
+      });
+    }
+  };
+  const addSeam = (tri, plane) => {
+    const intersections = [];
+    for (let i = 0; i < 3; i++) {
+      const a = tri[i], b = tri[(i + 1) % 3];
+      const da = distance(a, plane), db = distance(b, plane);
+      if (Math.abs(da) < 1e-8) intersections.push(a.position);
+      if (da * db < -1e-14) {
+        const t = da / (da - db);
+        intersections.push(a.position.map((value, axis) => value + (b.position[axis] - value) * t));
+      }
+    }
+    const unique = [...new Map(intersections.map((p) => [p.map((v) => v.toFixed(6)).join(','), p])).values()];
+    if (unique.length !== 2) return;
+    const keys = unique.map((p) => p.map((v) => v.toFixed(5)).join(',')).sort();
+    const key = `${plane.id}:${keys.join('|')}`;
+    if (seamKeys.has(key)) return;
+    seamKeys.add(key);
+    seamSegments.push(...unique[0], ...unique[1]);
+  };
+
+  const count = index ? index.count : position.count;
+  for (let i = 0; i < count; i += 3) {
+    const tri = [0, 1, 2].map((offset) => {
+      const vertexIndex = index ? index.getX(i + offset) : i + offset;
+      return {
+        position: [position.getX(vertexIndex), position.getY(vertexIndex), position.getZ(vertexIndex)],
+        normal: [normal.getX(vertexIndex), normal.getY(vertexIndex), normal.getZ(vertexIndex)],
+      };
+    });
+    const [left, right] = planes;
+    addPolygon(clip(clip(tri, left, false), right, false), buffers.body);
+    addPolygon(clip(tri, left, true), buffers.sleeveL);
+    addPolygon(clip(tri, right, true), buffers.sleeveR);
+    addSeam(tri, left);
+    addSeam(tri, right);
+  }
+
+  const parts = Object.entries(buffers).map(([id, data]) => {
+    const partGeometry = new THREE.BufferGeometry();
+    partGeometry.setAttribute('position', new THREE.Float32BufferAttribute(data.positions, 3));
+    partGeometry.setAttribute('normal', new THREE.Float32BufferAttribute(data.normals, 3));
+    partGeometry.computeBoundingBox();
+    partGeometry.computeBoundingSphere();
+    return { id, geometry: partGeometry };
+  });
+  const seams = new THREE.BufferGeometry();
+  seams.setAttribute('position', new THREE.Float32BufferAttribute(seamSegments, 3));
+  geometry.dispose();
+  return { parts, seams };
+}
+
 async function buildGarment(kind) {
   const t = templateById(kind);
-  const { geometry: geo, presets } = await garmentMesh(kind);
+  const { parts, presets, seams } = await garmentMesh(kind);
   const outerMat = new THREE.MeshPhysicalMaterial({ color: '#f2efea', roughness: 0.9, sheen: 1, sheenRoughness: 0.7 });
   const innerMat = new THREE.MeshStandardMaterial({ color: '#9a9a98', roughness: 1, side: THREE.BackSide });
-  const outer = new THREE.Mesh(geo, outerMat);
-  outer.name = t.label;
-  outer.castShadow = true;
-  outer.receiveShadow = true;
-  const inner = new THREE.Mesh(geo, innerMat);
-  inner.receiveShadow = true;
-  inner.raycast = () => {}; // prints only land on the outside
+  const outer = parts.map(({ id, geometry }) => {
+    const mesh = new THREE.Mesh(geometry, outerMat);
+    mesh.name = id === 'body' ? `${t.label} body` : `${t.label} ${id === 'sleeveL' ? 'left sleeve' : 'right sleeve'}`;
+    mesh.castShadow = true;
+    mesh.receiveShadow = true;
+    return mesh;
+  });
+  const inner = parts.map(({ id, geometry }) => {
+    const mesh = new THREE.Mesh(geometry, innerMat);
+    mesh.name = `${t.label} ${id} lining`;
+    mesh.receiveShadow = true;
+    mesh.raycast = () => {}; // prints only land on the outside
+    return mesh;
+  });
+  const seamMat = new THREE.LineBasicMaterial({ color: '#777772', transparent: true, opacity: 0.3, depthWrite: false });
+  const seamLine = seams?.getAttribute('position')?.count
+    ? new THREE.LineSegments(seams, seamMat)
+    : null;
+  if (seamLine) seamLine.name = 'Sleeve seams';
   const group = new THREE.Group();
-  group.add(outer, inner);
+  group.add(...outer, ...inner);
+  if (seamLine) group.add(seamLine);
   return {
     kind,
     label: t.label,
     group,
-    targets: [outer],
+    targets: outer,
     presets,
     options: { colors: FABRIC_COLORS, finishes: FABRIC_FINISHES },
     applyAppearance(app) {
@@ -141,6 +274,7 @@ async function buildGarment(kind) {
       tmpColor.set(app.color || '#f2efea');
       if (finish === 'washed') tmpColor.lerp(new THREE.Color('#8f8f8c'), 0.14);
       outerMat.color.copy(tmpColor);
+      seamMat.color.copy(tmpColor).multiplyScalar(0.66);
       outerMat.roughness = { heavy: 0.97, washed: 0.96, fleece: 0.98 }[finish] || 0.9;
       outerMat.sheen = { heavy: 0.45, washed: 0.3, fleece: 0.7 }[finish] ?? 0.95;
       outerMat.sheenRoughness = finish === 'heavy' ? 0.9 : finish === 'fleece' ? 0.85 : 0.7;
@@ -151,7 +285,7 @@ async function buildGarment(kind) {
       return { roughness: Math.min(1, outerMat.roughness + 0.02), metalness: 0, sheen: outerMat.sheen * 0.6, sheenRoughness: 0.8 };
     },
     update() {},
-    dispose() { outerMat.dispose(); innerMat.dispose(); },
+    dispose() { outerMat.dispose(); innerMat.dispose(); seamMat.dispose(); },
   };
 }
 
@@ -161,7 +295,6 @@ async function buildGarment(kind) {
 function buildMug() {
   const group = new THREE.Group();
   const glaze = new THREE.MeshPhysicalMaterial({ color: '#f2efea', roughness: 0.16, clearcoat: 0.9, clearcoatRoughness: 0.08 });
-  const foot = new THREE.MeshStandardMaterial({ color: '#d8d2c6', roughness: 0.85 });
   const R = 41, H = 95, W = 3.6;
   const v = (x, y) => new THREE.Vector2(x, y);
   const seg = 128;
@@ -175,7 +308,7 @@ function buildMug() {
     return m;
   };
   // unglazed foot ring, then the printable wall, then lip + inside
-  lathe([v(0, 2.2), v(R * 0.7, 2.2), v(R * 0.76, 0.2), v(R - 2.4, 0), v(R - 0.7, 1.4), v(R, 4.6)], foot, 'Base');
+  lathe([v(0, 2.2), v(R * 0.7, 2.2), v(R * 0.76, 0.2), v(R - 2.4, 0), v(R - 0.7, 1.4), v(R, 4.6)], glaze, 'Base');
   const wall = lathe([v(R, 4.6), v(R, H * 0.5), v(R, H - 3.2)], glaze, 'Mug wall');
   lathe([v(R, H - 3.2), v(R - 0.25, H - 1.1), v(R - 1.3, H), v(R - W + 0.5, H - 0.5), v(R - W, H - 3), v(R - W, 14), v(R - W - 2.5, 9.4), v(R * 0.55, 8.3), v(0, 8.1)], glaze, 'Lip');
 
@@ -201,9 +334,10 @@ function buildMug() {
     group,
     targets: [wall],
     presets: [
-      { id: 'front', label: 'Front', origin: [0, 0, 300], target: [0, 0, 0], size: 62 },
-      { id: 'back', label: 'Back', origin: [0, 0, -300], target: [0, 0, 0], size: 62 },
-      { id: 'left', label: 'Opposite handle', origin: [-300, 0, 0], target: [0, 0, 0], size: 62 },
+      // Start with a front-facing print patch. Customers can resize it to make a wrap.
+      { id: 'front', label: 'Front', origin: [0, 0, 300], target: [0, 0, 0], size: 42 },
+      { id: 'back', label: 'Back', origin: [0, 0, -300], target: [0, 0, 0], size: 42 },
+      { id: 'left', label: 'Opposite handle', origin: [-300, 0, 0], target: [0, 0, 0], size: 42 },
     ],
     options: { colors: MUG_COLORS, finishes: MUG_FINISHES },
     applyAppearance(app) {
@@ -216,30 +350,110 @@ function buildMug() {
       return { roughness: glaze.roughness + 0.04, metalness: 0, clearcoat: glaze.clearcoat, clearcoatRoughness: 0.08 };
     },
     update() {},
-    dispose() { meshes.forEach((m) => m.geometry.dispose()); glaze.dispose(); foot.dispose(); },
+    dispose() { meshes.forEach((m) => m.geometry.dispose()); glaze.dispose(); },
   };
 }
 
 /* ------------------------------------------------------------------ */
-/* Phone case: printed back faces the camera                           */
+/* Phone cases: device-specific body sizes and rear/front camera layouts. */
 /* ------------------------------------------------------------------ */
-function phoneCaseProfile(phoneModel) {
-  const name = String(phoneModel || '').toLowerCase();
-  let width = 73, height = 154, depth = 10.5;
-  if (/mini/.test(name)) { width = 64; height = 132; }
-  else if (/\bplus\b|\bmax\b|\bultra\b|\bxl\b/.test(name)) { width = 78; height = 164; }
-  else if (/\bpro\b/.test(name)) { width = 74; height = 153; }
-  if (/\bfold\b/.test(name)) { width = 78; height = 158; depth = 18; }
-  else if (/\bflip\b|\brazr\b|\bduo\b/.test(name)) { width = 74; height = 90; depth = 18; }
+const PUBLISHED_PHONE_DIMENSIONS = Object.freeze({
+  // Dimensions in mm, from the manufacturers' public specifications.
+  'iphone 18 pro max': [78, 163.4, 8.75],
+  'iphone 18 pro': [71.9, 150, 8.75],
+  'iphone 17 pro max': [78, 163.4, 8.75],
+  'iphone 17 pro': [71.9, 150, 8.75],
+  'galaxy s26 ultra': [78.1, 163.6, 7.9],
+  'galaxy s26+': [75.8, 158.4, 7.3],
+  'galaxy s26': [71.7, 149.6, 7.2],
+  'pixel 11 pro xl': [76.5, 162.7, 8.5],
+  'pixel 11 pro': [71.9, 152.7, 8.4],
+  'pixel 11': [72, 152.8, 8.6],
+  'pixel 11 pro fold': [76, 155.2, 10.1],
+  'oneplus 15': [76.67, 161.42, 8.2],
+});
 
-  let camera = 'generic';
-  if (name.includes('iphone')) camera = /pro|max/.test(name) ? 'iphone-pro' : 'iphone-dual';
-  else if (name.includes('pixel')) camera = 'pixel-bar';
-  else if (name.includes('galaxy')) camera = /ultra/.test(name) ? 'samsung-ultra' : 'samsung';
-  else if (/motorola|moto|razr/.test(name)) camera = 'motorola';
-  else if (/xiaomi|redmi|poco/.test(name)) camera = 'xiaomi';
-  else if (name.includes('oneplus')) camera = 'oneplus';
-  return { width, height, depth, camera };
+function phoneCaseProfile(phoneModel) {
+  const name = String(phoneModel || '').trim().toLowerCase().replace(/\s+/g, ' ');
+  const exact = PUBLISHED_PHONE_DIMENSIONS[name];
+  let deviceWidth, deviceHeight, deviceDepth;
+
+  if (exact) [deviceWidth, deviceHeight, deviceDepth] = exact;
+  else if (name.includes('iphone')) {
+    if (/mini/.test(name)) [deviceWidth, deviceHeight, deviceDepth] = [64.2, 131.5, 7.8];
+    else if (/plus/.test(name)) [deviceWidth, deviceHeight, deviceDepth] = [77.8, 160.9, 7.8];
+    else if (/max/.test(name)) [deviceWidth, deviceHeight, deviceDepth] = [78, 163.4, 8.75];
+    else if (/pro/.test(name)) [deviceWidth, deviceHeight, deviceDepth] = [71.9, 150, 8.75];
+    else [deviceWidth, deviceHeight, deviceDepth] = [72, 151, 8.2];
+  } else if (name.includes('galaxy')) {
+    if (/fold/.test(name)) [deviceWidth, deviceHeight, deviceDepth] = [76, 158, 15.5];
+    else if (/flip/.test(name)) [deviceWidth, deviceHeight, deviceDepth] = [74, 86, 16];
+    else if (/ultra/.test(name)) [deviceWidth, deviceHeight, deviceDepth] = [78.1, 163.6, 7.9];
+    else if (/\+|plus/.test(name)) [deviceWidth, deviceHeight, deviceDepth] = [75.8, 158.4, 7.3];
+    else if (/\ba\d/.test(name)) [deviceWidth, deviceHeight, deviceDepth] = [76, 164, 8.2];
+    else [deviceWidth, deviceHeight, deviceDepth] = [71.7, 149.6, 7.2];
+  } else if (name.includes('pixel')) {
+    if (/fold/.test(name)) [deviceWidth, deviceHeight, deviceDepth] = [76, 155.2, 10.1];
+    else if (/xl/.test(name)) [deviceWidth, deviceHeight, deviceDepth] = [76.5, 162.7, 8.5];
+    else if (/pro/.test(name)) [deviceWidth, deviceHeight, deviceDepth] = [71.9, 152.7, 8.4];
+    else [deviceWidth, deviceHeight, deviceDepth] = [72, 152.8, 8.6];
+  } else if (/razr|flip|fold/.test(name)) {
+    [deviceWidth, deviceHeight, deviceDepth] = /razr|flip/.test(name) ? [74, 86, 16] : [76, 158, 15.5];
+  } else if (name.includes('oneplus')) {
+    [deviceWidth, deviceHeight, deviceDepth] = /15/.test(name) ? [76.67, 161.42, 8.2] : [75, 163, 8.3];
+  } else if (/xiaomi|redmi|poco/.test(name)) {
+    [deviceWidth, deviceHeight, deviceDepth] = /ultra|pro max|f ultra/.test(name) ? [77, 163, 8.5] : [75, 161, 8.2];
+  } else if (/motorola|moto/.test(name)) {
+    [deviceWidth, deviceHeight, deviceDepth] = /edge/.test(name) ? [74, 162, 8.3] : [76, 166, 8.5];
+  } else if (/oppo|vivo|realme|nothing/.test(name)) {
+    [deviceWidth, deviceHeight, deviceDepth] = /ultra|pro max|xl/.test(name) ? [77, 163, 8.5] : [74, 160, 8.2];
+  } else {
+    [deviceWidth, deviceHeight, deviceDepth] = [73, 154, 8.5];
+  }
+
+  // Add a small clearance around the phone and extra material for the case back.
+  const isFold = /fold/.test(name);
+  const isFlip = /flip|razr/.test(name);
+  let camera = 'generic-triple';
+  let frontCamera = 'punch';
+  if (name.includes('iphone')) {
+    camera = /pro/.test(name) ? 'iphone-pro' : /air/.test(name) ? 'iphone-single' : 'iphone-dual';
+    frontCamera = 'pill';
+  } else if (name.includes('pixel')) {
+    camera = /pro|fold/.test(name) ? 'pixel-triple' : 'pixel-dual';
+  } else if (name.includes('galaxy')) {
+    camera = /ultra/.test(name) ? 'samsung-ultra' : isFlip ? 'android-dual' : 'samsung-triple';
+  } else if (name.includes('oneplus')) camera = 'generic-triple';
+  else if (/xiaomi|redmi|poco/.test(name)) camera = /ultra|pro\+|f ultra/.test(name) ? 'generic-quad' : 'generic-triple';
+  else if (/motorola|moto/.test(name)) camera = /razr|\bg\d/.test(name) ? 'android-dual' : 'generic-triple';
+  else if (/oppo|vivo|realme/.test(name)) camera = /pro|ultra|elite/.test(name) ? 'generic-triple' : 'android-dual';
+  else if (name.includes('nothing')) camera = /phone \(3\)/.test(name) ? 'generic-triple' : 'android-dual';
+
+  return {
+    // Exterior case dimensions; the user-selected phone dimensions remain in mm.
+    width: deviceWidth + 2.4,
+    height: deviceHeight + 2.4,
+    depth: deviceDepth + 2.2,
+    camera,
+    frontCamera,
+    foldType: isFold ? 'fold' : isFlip ? 'flip' : '',
+  };
+}
+
+function phoneCameraLayout(camera, width) {
+  const layouts = {
+    'iphone-pro': { width: 43, height: 46, positions: [[-8, 8], [8, 8], [-8, -8]], radius: 5.8 },
+    'iphone-dual': { width: 35, height: 38, positions: [[-7, 7], [7, -7]], radius: 5.5 },
+    'iphone-single': { width: 24, height: 30, positions: [[0, 0]], radius: 6 },
+    'samsung-triple': { plate: false, width: 20, height: 42, left: 11, top: 23, positions: [[0, 14], [0, 0], [0, -14]], radius: 5.2 },
+    'samsung-ultra': { plate: false, width: 44, height: 48, left: 11, top: 28, positions: [[0, 17], [0, 1], [0, -15], [15, -6]], radius: 5.5 },
+    'pixel-triple': { width: width - 13, height: 18, center: true, positions: [[-18, 0], [0, 0], [18, 0]], radius: 5.2 },
+    'pixel-dual': { width: width - 15, height: 17, center: true, positions: [[-9, 0], [9, 0]], radius: 5.5 },
+    'android-dual': { width: 30, height: 40, positions: [[0, 8], [0, -8]], radius: 5.3 },
+    'generic-triple': { width: 42, height: 46, positions: [[-8, 8], [8, 8], [-8, -8]], radius: 5.8 },
+    'generic-quad': { width: 47, height: 49, positions: [[-10, 12], [10, 12], [-10, -7], [10, -7]], radius: 5.4 },
+  };
+  return layouts[camera] || layouts['generic-triple'];
 }
 
 function buildPhoneCase(params = {}) {
@@ -255,44 +469,84 @@ function buildPhoneCase(params = {}) {
   function buildGeometry() {
     group.traverse((o) => { if (o.isMesh) o.geometry.dispose(); });
     group.clear();
-    const { width: W, height: H, depth: D, camera } = phoneCaseProfile(phoneModel);
+    const { width: W, height: H, depth: D, camera, frontCamera, foldType } = phoneCaseProfile(phoneModel);
     const body = new THREE.Mesh(new RoundedBoxGeometry(W, H, D, 6, Math.min(W, H) * 0.13), shell);
     body.name = 'Case';
     const screen = new THREE.Mesh(new RoundedBoxGeometry(W - 6, H - 6, 1, 4, Math.min(W, H) * 0.1), glass);
     screen.position.z = -D / 2 - 0.65;
 
-    const pixelBar = camera === 'pixel-bar';
-    const vertical = camera === 'samsung';
-    const cameraW = pixelBar ? W - 14 : vertical ? 20 : camera === 'samsung-ultra' ? 43 : 39;
-    const cameraH = pixelBar ? 16 : vertical ? 53 : camera === 'samsung-ultra' ? 47 : 42;
-    const cameraX = pixelBar ? 0 : -W / 2 + cameraW / 2 + 6;
-    const cameraY = H / 2 - cameraH / 2 - 7;
-    const island = new THREE.Mesh(new RoundedBoxGeometry(cameraW, cameraH, 3.2, 4, Math.min(cameraW, cameraH) * 0.18), shell);
-    island.position.set(cameraX, cameraY, D / 2 + 1.2);
-    island.name = 'Camera lip';
+    const layout = phoneCameraLayout(camera, W);
+    const cameraX = layout.center ? 0 : layout.plate === false
+      ? -W / 2 + layout.left
+      : -W / 2 + layout.width / 2 + 6;
+    const cameraY = H / 2 - (layout.plate === false ? layout.top : layout.height / 2 + 7);
+    const island = layout.plate === false ? null : new THREE.Mesh(
+      new RoundedBoxGeometry(layout.width, layout.height, 3.2, 4, Math.min(layout.width, layout.height) * 0.18),
+      shell,
+    );
+    if (island) {
+      island.position.set(cameraX, cameraY, D / 2 + 1.2);
+      island.name = 'Camera lip';
+      island.castShadow = true;
+      island.receiveShadow = true;
+    }
 
-    let positions;
-    if (camera === 'iphone-dual') positions = [[-7, 7], [7, -7]];
-    else if (camera === 'iphone-pro') positions = [[-8, 8], [8, 8], [8, -8]];
-    else if (camera === 'samsung-ultra') positions = [[-10, 12], [10, 12], [-10, -7], [10, -7]];
-    else if (camera === 'samsung') positions = [[0, 16], [0, 0], [0, -16]];
-    else if (pixelBar) positions = [[-18, 0], [0, 0], [18, 0]];
-    else positions = [[-8, 8], [8, 8], [-8, -8]];
-    const lensRadius = Math.max(4.5, Math.min(6.2, W * 0.08));
+    const lensRadius = layout.radius;
     const lensGeo = new THREE.CylinderGeometry(lensRadius, lensRadius, 2.4, 40);
     lensGeo.rotateX(Math.PI / 2);
     const ringGeo = new THREE.TorusGeometry(lensRadius + 0.4, 0.7, 12, 40);
-    const lenses = positions.map(([x, y]) => {
+    const lensZ = D / 2 + (island ? 3.2 : 1.2);
+    const lenses = layout.positions.map(([x, y]) => {
       const cameraUnit = new THREE.Group();
       const l = new THREE.Mesh(lensGeo, lens);
       const r = new THREE.Mesh(ringGeo, metal);
       r.position.z = 1.2;
       cameraUnit.add(l, r);
-      cameraUnit.position.set(cameraX + x, cameraY + y, D / 2 + 3.2);
+      cameraUnit.position.set(cameraX + x, cameraY + y, lensZ);
       return cameraUnit;
     });
-    [body, screen, island].forEach((m) => { m.castShadow = true; m.receiveShadow = true; });
-    group.add(body, screen, island, ...lenses);
+
+    // Front camera and earpiece details identify the phone's front cutout.
+    const frontParts = [];
+    if (frontCamera === 'pill') {
+      const pill = new THREE.Mesh(new RoundedBoxGeometry(18, 5, 0.5, 4, 2.4), lens);
+      pill.position.set(0, H / 2 - 9, -D / 2 - 1.42);
+      pill.name = 'Front camera pill';
+      frontParts.push(pill);
+    } else {
+      const punch = new THREE.Mesh(new THREE.CylinderGeometry(1.8, 1.8, 0.5, 32), lens);
+      punch.rotation.x = Math.PI / 2;
+      punch.position.set(0, H / 2 - 9, -D / 2 - 1.42);
+      punch.name = 'Front camera cutout';
+      frontParts.push(punch);
+    }
+    if (frontCamera !== 'pill') {
+      const speaker = new THREE.Mesh(new RoundedBoxGeometry(16, 1, 0.35, 3, 0.45), metal);
+      speaker.position.set(0, H / 2 - 3.5, -D / 2 - 1.2);
+      speaker.name = 'Earpiece';
+      frontParts.push(speaker);
+    }
+
+    const sideParts = [];
+    const buttonMaterial = metal;
+    const buttonSize = Math.min(22, H * 0.15);
+    const volume = new THREE.Mesh(new RoundedBoxGeometry(1.2, buttonSize, 2, 3, 0.55), buttonMaterial);
+    volume.position.set(-W / 2 - 0.35, H * 0.22, 0);
+    volume.name = 'Volume buttons';
+    sideParts.push(volume);
+    const power = new THREE.Mesh(new RoundedBoxGeometry(1.2, Math.min(16, H * 0.11), 2, 3, 0.55), buttonMaterial);
+    power.position.set(W / 2 + 0.35, H * 0.18, 0);
+    power.name = 'Power button';
+    sideParts.push(power);
+    if (foldType) {
+      const hinge = new THREE.Mesh(new RoundedBoxGeometry(1.4, H * 0.88, 1.2, 4, 0.65), metal);
+      hinge.position.set(W / 2 + 0.25, 0, 0);
+      hinge.name = foldType === 'flip' ? 'Flip hinge' : 'Fold hinge';
+      sideParts.push(hinge);
+    }
+
+    [body, screen].forEach((m) => { m.castShadow = true; m.receiveShadow = true; });
+    group.add(body, screen, ...frontParts, ...sideParts, ...(island ? [island] : []), ...lenses);
     targets.splice(0, targets.length, body, screen);
     presets.splice(0, presets.length,
       { id: 'back', label: 'Back cover', origin: [0, -H * 0.05, 300], target: [0, -H * 0.05, 0], size: W * 0.86 },

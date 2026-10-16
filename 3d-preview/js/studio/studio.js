@@ -530,10 +530,12 @@ export class Studio extends EventTarget {
     h.updateMatrixWorld(true);
     const w = l.size * l.scaleX;
     const ht = (l.size / (l._aspect || 1)) * l.scaleY;
-    // deep enough to wrap curved surfaces; keepFacing() stops it reaching the far side
-    const depth = THREE.MathUtils.clamp(Math.max(w, ht) * 1.1, 0.06, 0.6);
+    // Keep the projection deep enough to reach the sides of curved products as the print grows.
+    const productSpan = this.bounds.getSize(new THREE.Vector3()).length();
+    const depth = THREE.MathUtils.clamp(Math.max(w, ht, productSpan * 0.5) * 1.1, 0.06, Math.max(0.6, productSpan));
     let geo = new DecalGeometry(hit.object, hit.point, h.rotation.clone(), new THREE.Vector3(w, ht, depth));
-    geo = keepFacing(geo, on);
+    const sideWrap = !['phonecase', 'frame'].includes(this.handle.kind);
+    geo = keepFacing(geo, on, sideWrap ? -0.15 : 0.1);
     const inv = hit.object.matrixWorld.clone().invert();
     geo.applyMatrix4(inv);
     const mesh = new THREE.Mesh(geo, l._mat);
@@ -980,7 +982,7 @@ export class Studio extends EventTarget {
 }
 
 /** Drop decal triangles that face away from the projector (stops prints bleeding to the inside). */
-function keepFacing(geo, dir) {
+function keepFacing(geo, dir, minFacing = 0.1) {
   const pos = geo.attributes.position, nor = geo.attributes.normal, uv = geo.attributes.uv;
   const P = [], N = [], U = [];
   const a = new THREE.Vector3(), b = new THREE.Vector3(), c = new THREE.Vector3(), fnm = new THREE.Vector3();
@@ -988,7 +990,7 @@ function keepFacing(geo, dir) {
     a.fromBufferAttribute(pos, i); b.fromBufferAttribute(pos, i + 1); c.fromBufferAttribute(pos, i + 2);
     fnm.subVectors(c, b).cross(a.clone().sub(b)).normalize();
     const vn = new THREE.Vector3().fromBufferAttribute(nor, i).add(new THREE.Vector3().fromBufferAttribute(nor, i + 1)).add(new THREE.Vector3().fromBufferAttribute(nor, i + 2)).normalize();
-    if (vn.dot(dir) < 0.1 && fnm.dot(dir) < 0.1) continue;
+    if (vn.dot(dir) < minFacing && fnm.dot(dir) < minFacing) continue;
     for (let k = 0; k < 3; k++) {
       P.push(pos.getX(i + k), pos.getY(i + k), pos.getZ(i + k));
       N.push(nor.getX(i + k), nor.getY(i + k), nor.getZ(i + k));
