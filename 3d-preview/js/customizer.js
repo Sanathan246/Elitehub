@@ -332,7 +332,7 @@ function setTab(tab) {
   studio.setEditing(tab === 'design');
   $('#layoutToolbar').hidden = tab !== 'design';
   $('#stageHint').textContent = tab === 'design' && studio.layers.length
-    ? 'Drag artwork to move it; use an edge handle to stretch one way or a corner handle to stretch both ways.'
+    ? 'Drag artwork to move it. Use a corner handle to resize proportionally or a side handle to stretch one dimension.'
     : 'Drag to rotate. Scroll or pinch to zoom.';
   syncLayoutToolbar();
   $('.p3d-panels').scrollTop = 0;
@@ -530,7 +530,7 @@ function renderProduct() {
 /* ------------------------------------------------------------------ */
 function renderDesign() {
   const el = $('#panel-design');
-  el.innerHTML = '<p class="p3d-note">Choose Front, Back or Sleeves, then drag the design or its handles to position and scale it. Larger prints can wrap over the outer sides of curved products; the original image ratio stays controlled by the resize handles.</p>' +
+  el.innerHTML = '<p class="p3d-note">Choose Front, Back or Sleeves, then drag the design to move it. Corner handles resize the whole design proportionally; side handles stretch one dimension. Larger prints can extend across neighboring printable parts.</p>' +
     '<div class="p3d-layer-head"><h3 class="p3d-h">Layers</h3><span class="muted" id="layerCount"></span></div>' +
     '<ul class="p3d-layers" id="layerList"></ul>' +
     '<div id="layerEditor"></div>';

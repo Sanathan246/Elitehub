@@ -387,7 +387,7 @@ export class Studio extends EventTarget {
   async duplicateLayer(id) {
     const l = this.layers.find((x) => x.id === id);
     if (!l) return;
-    const { _mesh, _mat, _tex, _frame, _aspect, id: _, ...rest } = l;
+    const { _mesh, _meshes, _mat, _tex, _frame, _aspect, id: _, ...rest } = l;
     const n = v3(l.anchor.n);
     const p = v3(l.anchor.p).add(new THREE.Vector3(0, -1, 0).projectOnPlane(n).setLength((l.size / this.scale) * 0.6));
     await this.addLayer({ ...rest, name: `${l.name} copy`, anchor: { p: arr(p), n: l.anchor.n }, presetId: null });
@@ -398,7 +398,9 @@ export class Studio extends EventTarget {
     const j = i + delta;
     if (i < 0 || j < 0 || j >= this.layers.length) return;
     [this.layers[i], this.layers[j]] = [this.layers[j], this.layers[i]];
-    this.layers.forEach((l, k) => { if (l._mesh) l._mesh.renderOrder = 10 + k; });
+    this.layers.forEach((l, k) => {
+      for (const mesh of l._meshes || (l._mesh ? [l._mesh] : [])) mesh.renderOrder = 10 + k;
+    });
     this._emitLayers();
   }
 
@@ -497,11 +499,12 @@ export class Studio extends EventTarget {
   }
 
   _removeDecal(l) {
-    if (l._mesh) {
-      l._mesh.parent?.remove(l._mesh);
-      l._mesh.geometry.dispose();
-      l._mesh = null;
+    for (const mesh of l._meshes || (l._mesh ? [l._mesh] : [])) {
+      mesh.parent?.remove(mesh);
+      mesh.geometry.dispose();
     }
+    l._meshes = [];
+    l._mesh = null;
     l._frame = null;
   }
 
@@ -533,17 +536,36 @@ export class Studio extends EventTarget {
     // Keep the projection deep enough to reach the sides of curved products as the print grows.
     const productSpan = this.bounds.getSize(new THREE.Vector3()).length();
     const depth = THREE.MathUtils.clamp(Math.max(w, ht, productSpan * 0.5) * 1.1, 0.06, Math.max(0.6, productSpan));
-    let geo = new DecalGeometry(hit.object, hit.point, h.rotation.clone(), new THREE.Vector3(w, ht, depth));
     const sideWrap = !['phonecase', 'frame'].includes(this.handle.kind);
-    geo = keepFacing(geo, on, sideWrap ? -0.15 : 0.1);
-    const inv = hit.object.matrixWorld.clone().invert();
-    geo.applyMatrix4(inv);
-    const mesh = new THREE.Mesh(geo, l._mat);
-    mesh.renderOrder = 10 + this.layers.indexOf(l);
-    mesh.raycast = () => {};
-    hit.object.add(mesh);
-    l._mesh = mesh;
+    const meshes = [];
+    const targets = this.handle.targets?.length ? this.handle.targets : [hit.object];
+    const projectorBounds = new THREE.Box3(
+      new THREE.Vector3(-w / 2, -ht / 2, -depth / 2),
+      new THREE.Vector3(w / 2, ht / 2, depth / 2),
+    ).applyMatrix4(new THREE.Matrix4().compose(hit.point, h.quaternion, new THREE.Vector3(1, 1, 1)));
+    for (const target of targets) {
+      if (!target.geometry.boundingBox) target.geometry.computeBoundingBox();
+      const targetBounds = target.geometry.boundingBox?.clone().applyMatrix4(target.matrixWorld);
+      if (targetBounds && !targetBounds.intersectsBox(projectorBounds)) continue;
+      const projected = new DecalGeometry(target, hit.point, h.rotation.clone(), new THREE.Vector3(w, ht, depth));
+      const geo = keepFacing(projected, on, sideWrap ? -0.15 : 0.1);
+      projected.dispose();
+      if (!geo.attributes.position?.count) {
+        geo.dispose();
+        continue;
+      }
+      geo.applyMatrix4(target.matrixWorld.clone().invert());
+      const mesh = new THREE.Mesh(geo, l._mat);
+      mesh.renderOrder = 10 + this.layers.indexOf(l);
+      mesh.raycast = () => {};
+      target.add(mesh);
+      meshes.push(mesh);
+    }
+    if (!meshes.length) return;
+    l._meshes = meshes;
+    l._mesh = meshes[0];
     // frame in the hit object's local space so it follows lids and turntables
+    const inv = hit.object.matrixWorld.clone().invert();
     const fm = new THREE.Matrix4().compose(hit.point, h.quaternion, new THREE.Vector3(1, 1, 1)).premultiply(inv);
     l._frame = { object: hit.object, matrix: fm, w, h: ht, depth };
     if (l.id === this.selectedId) this._updateSelectionFrame();
@@ -693,6 +715,8 @@ export class Studio extends EventTarget {
           startScaleY: layer.scaleY,
           startX: e.clientX,
           startY: e.clientY,
+          center: geometry.center,
+          startDistance: Math.max(1, Math.hypot(e.clientX - geometry.center.x, e.clientY - geometry.center.y)),
           width: geometry.width,
           height: geometry.height,
           widthAxis: geometry.widthAxis,
@@ -721,10 +745,19 @@ export class Studio extends EventTarget {
         if (drag.mode === 'resize') {
           const dx = e.clientX - drag.startX;
           const dy = e.clientY - drag.startY;
-          const widthDelta = (dx * drag.widthAxis.x + dy * drag.widthAxis.y) * drag.signX;
-          const heightDelta = (dx * drag.heightAxis.x + dy * drag.heightAxis.y) * drag.signY;
-          if (drag.axes.includes('x')) drag.layer.scaleX = THREE.MathUtils.clamp(drag.startScaleX * (1 + (2 * widthDelta / drag.width)), 0.1, 20);
-          if (drag.axes.includes('y')) drag.layer.scaleY = THREE.MathUtils.clamp(drag.startScaleY * (1 + (2 * heightDelta / drag.height)), 0.1, 20);
+          if (drag.axes === 'xy') {
+            const distance = Math.hypot(e.clientX - drag.center.x, e.clientY - drag.center.y);
+            const minFactor = Math.max(0.1 / drag.startScaleX, 0.1 / drag.startScaleY);
+            const maxFactor = Math.min(20 / drag.startScaleX, 20 / drag.startScaleY);
+            const factor = THREE.MathUtils.clamp(distance / drag.startDistance, minFactor, maxFactor);
+            drag.layer.scaleX = drag.startScaleX * factor;
+            drag.layer.scaleY = drag.startScaleY * factor;
+          } else {
+            const widthDelta = (dx * drag.widthAxis.x + dy * drag.widthAxis.y) * drag.signX;
+            const heightDelta = (dx * drag.heightAxis.x + dy * drag.heightAxis.y) * drag.signY;
+            if (drag.axes === 'x') drag.layer.scaleX = THREE.MathUtils.clamp(drag.startScaleX * (1 + (2 * widthDelta / drag.width)), 0.1, 20);
+            if (drag.axes === 'y') drag.layer.scaleY = THREE.MathUtils.clamp(drag.startScaleY * (1 + (2 * heightDelta / drag.height)), 0.1, 20);
+          }
           this._buildDecal(drag.layer);
           return;
         }
