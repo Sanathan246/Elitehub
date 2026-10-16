@@ -1,16 +1,13 @@
 /* EliteHub 3D previews: saved previews + folders.
  *
- * Kept in this browser's IndexedDB, like the 2D studio's design files
- * (see FIREBASE_SETUP.md: "Custom preview images and local design files
- * stay in browser storage"). Uploaded 3D files and artwork can be many MB,
- * which is far over Firestore's 1 MB document limit.
+ * IndexedDB keeps a local cache and guest previews. Signed-in previews are
+ * also saved as Firestore metadata + Firebase Storage assets; previews.js
+ * hydrates those cloud records back into this cache on each device. Uploaded
+ * 3D files and artwork can be many MB, which is far over Firestore's 1 MB limit.
  *
  * Each record carries an `owner`: the signed-in Firebase uid, or "guest".
  * Lists only ever show the current owner's records, so two people sharing a
  * computer don't see each other's previews.
- *
- * To sync across devices later, keep these function names and move the
- * bodies to Firestore (metadata) + Firebase Storage (files).
  *
  * Preview: { id, owner, name, folderId|null, product, thumbnail, state, file?, fileName?, createdAt, updatedAt }
  * Folder:  { id, owner, name, createdAt }

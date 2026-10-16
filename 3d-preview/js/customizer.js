@@ -143,9 +143,27 @@ async function init() {
   const template = params.get('template') || params.get('product');
   if (id) {
     await authSettled();
-    const rec = await store.getPreview(id);
-    if (rec) return openSaved(rec);
-    EH.toast("That preview isn't saved on this device or account.", { type: 'error' });
+    let rec = await store.getPreview(id);
+    let cloudOpenError = null;
+    if (!rec) {
+      try {
+        rec = await loadCloudPreview(id);
+        if (rec) await store.savePreview(rec);
+      } catch (error) {
+        cloudOpenError = error;
+        console.warn('Saved cloud preview could not be opened.', error);
+        EH.toast(error.message || 'This saved preview could not be opened.', { type: 'error', duration: 6000 });
+      }
+    }
+    if (rec) {
+      try { await openSaved(rec); return; }
+      catch (error) {
+        cloudOpenError = error;
+        console.error('Saved preview could not be opened.', error);
+        EH.toast(error.message || 'This saved preview could not be opened.', { type: 'error', duration: 6000 });
+      }
+    }
+    if (!cloudOpenError) EH.toast("That preview isn't saved on this device or account. Sign in to open cloud previews.", { type: 'error' });
   }
   const requestedTemplate = template === 'tshirt' ? 'tee' : template;
   const activeTemplate = TEMPLATES.some((t) => t.id === requestedTemplate) ? requestedTemplate : 'tee';
@@ -197,8 +215,54 @@ function authSettled() {
 }
 const wait = (ms) => new Promise((r) => setTimeout(r, ms));
 
+async function loadCloudPreview(id) {
+  const api = window.EHFirebase;
+  if (!api?.enabled) return null;
+  await api.ready;
+  const user = api.currentUser;
+  if (!user) return null;
+  const record = await api.getCustomization(user.uid, id);
+  if (!record || record.orderId || !record.assets?.details || !record.assets?.preview) return null;
+  const [detailsBlob, previewBlob] = await Promise.all([
+    api.downloadCustomizationAsset(user.uid, record.assets.details),
+    api.downloadCustomizationAsset(user.uid, record.assets.preview),
+  ]);
+  if (api.currentUser?.uid !== user.uid || store.currentOwner() !== user.uid) throw new Error('Your signed-in account changed while the preview was loading. Please try again.');
+  const details = JSON.parse(await detailsBlob.text());
+  if (!details.state || typeof details.state !== 'object') throw new Error('The saved preview is missing its design details.');
+  const thumbnail = await new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(String(reader.result || ''));
+    reader.onerror = () => reject(reader.error || new Error('The preview image could not be read.'));
+    reader.readAsDataURL(previewBlob);
+  });
+  return {
+    id: String(record.previewId || record.id || id),
+    name: record.name || details.name || 'Saved 3D preview',
+    product: record.product || details.product || '3D preview',
+    kind: record.kind || details.kind || 'product',
+    orderType: record.orderType || details.orderType || details.productType || null,
+    orderColor: record.orderColor || details.orderColor || null,
+    thumbnail,
+    state: details.state,
+    fileName: record.sourceModelName || details.sourceModelName || details.state.model?.fileName || null,
+    cloudPaths: record.assets,
+    cloudSynced: true,
+    cloudOwnerUid: user.uid,
+  };
+}
+
 async function openSaved(rec) {
-  await withLoading('Opening your preview', () => studio.setState(rec.state, rec.file || null));
+  let file = rec.file || null;
+  if (!file && rec.state?.model?.kind === 'upload' && rec.cloudPaths?.sourceModel && rec.cloudOwnerUid) {
+    const api = window.EHFirebase;
+    await api?.ready;
+    file = await api.downloadCustomizationAsset(rec.cloudOwnerUid, rec.cloudPaths.sourceModel);
+  }
+  if (rec.state?.model?.kind === 'upload' && !(file instanceof Blob)) {
+    throw new Error('The original uploaded 3D model is unavailable. Reopen it on the device where it was uploaded, then save it again while signed in.');
+  }
+  await withLoading('Opening your preview', () => studio.setState(rec.state, file));
   S.previewId = rec.id;
   S.name = rec.name;
   S.folderId = rec.folderId || null;
@@ -909,6 +973,8 @@ function customizationDetails(id, order = null) {
     product: type ? EH.types[type].label : productLabel(),
     kind: kind(),
     productType: type,
+    orderType: kind() === 'upload' ? (S.orderType || '') : '',
+    orderColor: kind() === 'upload' ? (S.orderColor || '') : '',
     sourceModelName: kind() === 'upload' ? (studio.model?.fileName || '') : '',
     color: colorId ? EH.colors[colorId].name : 'Custom',
     colorHex: kind() === 'upload' && colorId ? EH.colors[colorId].hex : (studio.appearance.color || ''),
@@ -1120,6 +1186,8 @@ async function createCustomizationAssets(id, order = null) {
       product: details.product,
       kind: details.kind,
       productType: details.productType || '',
+      orderType: details.orderType || '',
+      orderColor: details.orderColor || '',
       color: details.color,
       colorHex: details.colorHex,
       finish: details.finish,

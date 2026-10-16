@@ -25,7 +25,9 @@
     subscribeAllOrders() { return () => {}; },
     updateOrder() { return Promise.reject(unavailableError()); },
     saveCustomization() { return Promise.reject(unavailableError()); },
+    listCustomizations() { return Promise.resolve([]); },
     getCustomization() { return Promise.resolve(null); },
+    deleteCustomization() { return Promise.reject(unavailableError()); },
     downloadCustomizationAsset() { return Promise.reject(unavailableError()); }
   });
 
@@ -249,6 +251,8 @@
           product: String(metadata.product || '').slice(0, 120),
           kind: String(metadata.kind || '').slice(0, 40),
           productType: String(metadata.productType || '').slice(0, 40),
+          orderType: String(metadata.orderType || '').slice(0, 40),
+          orderColor: String(metadata.orderColor || '').slice(0, 40),
           color: String(metadata.color || '').slice(0, 40),
           colorHex: String(metadata.colorHex || '').slice(0, 16),
           finish: String(metadata.finish || '').slice(0, 40),
@@ -278,6 +282,34 @@
         if (!uid || (!isOwner && !isAdmin)) throw new Error('Sign in to open this saved mockup.');
         const snapshot = await firestoreModule.getDoc(firestoreModule.doc(db, 'users', uid, 'customizations', String(id || '')));
         return snapshot.exists() ? Object.assign({ id: snapshot.id }, snapshot.data()) : null;
+      },
+      async listCustomizations(uid) {
+        const current = auth.currentUser;
+        const adminEmail = String(window.EH_CONFIG?.adminEmail || '').trim().toLowerCase();
+        const isOwner = !!current && current.uid === uid;
+        const isAdmin = !!current && current.emailVerified && adminEmail
+          && String(current.email || '').trim().toLowerCase() === adminEmail;
+        if (!uid || (!isOwner && !isAdmin)) throw new Error('Sign in to view saved 3D previews.');
+        const snapshot = await firestoreModule.getDocs(firestoreModule.collection(db, 'users', uid, 'customizations'));
+        return snapshot.docs.map((doc) => Object.assign({ id: doc.id }, doc.data()));
+      },
+      async deleteCustomization(uid, id) {
+        const current = auth.currentUser;
+        const isOwner = !!current && current.uid === uid;
+        if (!uid || !isOwner) throw new Error('Sign in to delete this saved 3D preview.');
+        const docRef = firestoreModule.doc(db, 'users', uid, 'customizations', String(id || ''));
+        const snapshot = await firestoreModule.getDoc(docRef);
+        if (!snapshot.exists()) return false;
+        const record = snapshot.data();
+        if (record.orderId) throw new Error('Files already attached to an order cannot be deleted here.');
+        await Promise.all(Object.values(record.assets || {}).map(async (path) => {
+          if (typeof path === 'string' && path.startsWith(`users/${uid}/customizations/`)) {
+            try { await storageModule.deleteObject(storageModule.ref(storage, path)); }
+            catch (error) { if (error?.code !== 'storage/object-not-found') throw error; }
+          }
+        }));
+        await firestoreModule.deleteDoc(docRef);
+        return true;
       },
       async downloadCustomizationAsset(uid, path) {
         const current = auth.currentUser;

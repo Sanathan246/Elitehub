@@ -27,11 +27,16 @@ const V = { folder: ALL, sort: 'updated', query: '' };
 const dateFmt = new Intl.DateTimeFormat('en-IN', { day: 'numeric', month: 'short', year: 'numeric' });
 let previews = [];
 let folders = [];
+let cloudSyncPromise = null;
+let cloudSyncWarning = '';
 
 EH.ready(() => {
   store.followAuth();
   store.onChange(refresh);
-  document.addEventListener('firebase:auth-changed', (e) => greet(e.detail && e.detail.user));
+  document.addEventListener('firebase:auth-changed', (e) => {
+    greet(e.detail && e.detail.user);
+    refresh();
+  });
 
   $('[data-pv="new-folder"]').addEventListener('click', newFolder);
   $('#pvSort').addEventListener('change', (e) => { V.sort = e.target.value; renderGrid(); });
@@ -57,15 +62,81 @@ function greet(user) {
 }
 
 async function refresh() {
+  await syncCloudPreviews();
   [previews, folders] = await Promise.all([store.listPreviews(), store.listFolders()]);
   if (V.folder !== ALL && V.folder !== LOOSE && !folders.some((f) => f.id === V.folder)) V.folder = ALL;
   renderTile();
   renderFolders();
   renderGrid();
   renderBanner();
-  $('#pvStorageNote').textContent = store.isGuest()
+  const storageMessage = store.isGuest()
     ? 'Previews are stored in this browser. Sign in before saving to keep them with your account on this device.'
-    : 'Previews are stored in this browser for your signed-in account.';
+    : 'Cloud-saved previews are available across devices when you sign in. Folder organization stays in this browser.';
+  $('#pvStorageNote').textContent = cloudSyncWarning ? `${storageMessage} ${cloudSyncWarning}` : storageMessage;
+}
+
+async function syncCloudPreviews() {
+  const api = window.EHFirebase;
+  if (!api?.enabled || store.isGuest()) { cloudSyncWarning = ''; return; }
+  if (cloudSyncPromise) return cloudSyncPromise;
+  cloudSyncWarning = '';
+  cloudSyncPromise = (async () => {
+    await api.ready;
+    const user = api.currentUser;
+    if (!user || user.uid !== store.currentOwner() || typeof api.listCustomizations !== 'function') return;
+    const [remote, local] = await Promise.all([api.listCustomizations(user.uid), store.listPreviews()]);
+    const localIds = new Set(local.map((item) => item.id));
+    for (const record of remote) {
+      const id = String(record.previewId || record.id || '');
+      if (!id || localIds.has(id) || record.orderId || !record.assets?.details || !record.assets?.preview) continue;
+      try {
+        const [detailsBlob, previewBlob] = await Promise.all([
+          api.downloadCustomizationAsset(user.uid, record.assets.details),
+          api.downloadCustomizationAsset(user.uid, record.assets.preview),
+        ]);
+        const details = JSON.parse(await detailsBlob.text());
+        if (!details.state || typeof details.state !== 'object') continue;
+        if (api.currentUser?.uid !== user.uid || store.currentOwner() !== user.uid) break;
+        const thumbnail = await blobDataUrl(previewBlob);
+        if (api.currentUser?.uid !== user.uid || store.currentOwner() !== user.uid) break;
+        await store.savePreview({
+          id,
+          name: record.name || details.name || 'Saved 3D preview',
+          product: record.product || details.product || '3D preview',
+          kind: record.kind || details.kind || 'product',
+          orderType: record.orderType || details.orderType || details.productType || null,
+          orderColor: record.orderColor || details.orderColor || null,
+          thumbnail,
+          state: details.state,
+          fileName: record.sourceModelName || details.sourceModelName || details.state.model?.fileName || null,
+          cloudPaths: record.assets,
+          cloudSynced: true,
+          cloudOwnerUid: user.uid,
+        });
+        localIds.add(id);
+      } catch (error) {
+        cloudSyncWarning = 'Some saved previews could not be downloaded. Check Firebase Storage access and try again.';
+        console.warn('A saved cloud preview could not be loaded.', record.id, error);
+      }
+    }
+  })();
+  try {
+    await cloudSyncPromise;
+  } catch (error) {
+    cloudSyncWarning = 'Your cloud previews could not be loaded. Check your sign-in and Firebase access.';
+    console.warn('Saved previews could not sync from Firebase.', error);
+  } finally {
+    cloudSyncPromise = null;
+  }
+}
+
+function blobDataUrl(blob) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(String(reader.result || ''));
+    reader.onerror = () => reject(reader.error || new Error('Preview image could not be read.'));
+    reader.readAsDataURL(blob);
+  });
 }
 
 /* ---------- tile on the account home ---------- */
@@ -244,8 +315,22 @@ function renderGrid() {
     if (act.dataset.do === 'duplicate') { const c = await store.duplicatePreview(id); EH.toast(`Made “${c.name}”`); }
     if (act.dataset.do === 'download' && p.thumbnail) EH.download(p.thumbnail, `${p.name.replace(/[^\w-]+/g, '-').toLowerCase()}.jpg`);
     if (act.dataset.do === 'delete') {
-      const ok = await EH.confirm('Delete this preview?', `“${esc(p.name)}” and its saved artwork will be removed from this device. This can't be undone.`, 'Delete');
-      if (ok) { await store.deletePreview(id); EH.toast('Preview deleted'); }
+      const cloudCopy = !!(p.cloudSynced && p.cloudOwnerUid);
+      const ok = await EH.confirm('Delete this preview?', `“${esc(p.name)}” and its saved artwork will be removed${cloudCopy ? ' from your account and this device' : ' from this device'}. This can't be undone.`, 'Delete');
+      if (!ok) return;
+      try {
+        if (cloudCopy) {
+          const api = window.EHFirebase;
+          await api?.ready;
+          if (!api?.enabled || api.currentUser?.uid !== p.cloudOwnerUid) throw new Error('Sign in to the account that owns this saved preview before deleting it.');
+          await api.deleteCustomization(p.cloudOwnerUid, id);
+        }
+        await store.deletePreview(id);
+        EH.toast('Preview deleted');
+      } catch (error) {
+        console.error('Saved preview could not be deleted.', error);
+        EH.toast(error.message || 'This preview could not be deleted.', { type: 'error' });
+      }
     }
   };
   grid.onkeydown = (e) => {

@@ -741,7 +741,8 @@
       `*Total: ${EH.money(o.totals.total)}*`,
       `Payment: ${EH.paymentLabel(o.payment)}${o.paymentId ? ' (' + o.paymentId + ')' : ''}`,
       c.notes ? `Notes: ${c.notes}` : null,
-      o.items.some((i) => i.custom) ? '\nI will share my custom design file(s) with you.' : null
+      o.items.some((i) => i.custom3d) ? '\nThe 3D mockup, design details, and any original uploaded model are stored with this order. Open this order in the store dashboard to download them.'
+        : o.items.some((i) => i.custom) ? '\nI will share my custom design file(s) with you.' : null
     ];
     return lines.filter((l) => l !== null).join('\n');
   };

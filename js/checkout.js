@@ -255,7 +255,10 @@
       } catch (error) {
         if (whatsappWindow) whatsappWindow.close();
         console.error('Order could not be saved to Firebase.', error);
-        EH.toast('Your order could not be saved. Please try again.', { type: 'error', duration: 4500 });
+        const message = ['storage/unauthorized', 'permission-denied', 'firestore/permission-denied'].includes(error?.code)
+          ? 'Your order was not placed because the store could not save its 3D files. Please contact us so we can fix the upload settings.'
+          : (error?.message || 'Your order could not be saved. Please try again.');
+        EH.toast(message, { type: 'error', duration: 6500 });
         return;
       }
       if (payment === 'whatsapp') {
@@ -340,9 +343,9 @@
         <p class="muted">Your order has been placed, ${EH.esc(c.name.split(' ')[0])}! ${order.status === 'Paid' ? 'Payment received — we’ll' : 'We’ll'} start working on it right away.</p>
         <div class="order-id">Order #${order.id}</div>
         <p class="form-note ok" id="emailNote" style="min-height:0"></p>
-        ${waBtn || mailBtn ? `<p class="muted" style="font-size:13.5px;margin-top:10px">${C2.whatsappNumber ? 'Tap below to send your order to us on WhatsApp' + (hasCustom ? ' — then attach your design file(s).' : ' for the fastest confirmation.') : `Tap below to email your order details to us at <b class="gold">${EH.esc(C2.email)}</b> so we can confirm it.`}</p>` : ''}
+        ${waBtn || mailBtn ? `<p class="muted" style="font-size:13.5px;margin-top:10px">${C2.whatsappNumber ? 'Tap below to send your order to us on WhatsApp' + (hasCustom && !order.items.some((item) => item.custom3d) ? ' — then attach your design file(s).' : ' for the fastest confirmation.') : `Tap below to email your order details to us at <b class="gold">${EH.esc(C2.email)}</b> so we can confirm it.`}</p>` : ''}
         <div class="success-actions"><button class="btn btn-outline" type="button" id="reopenTracking">${EH.icon('package')} Track Order</button>${waBtn}${mailBtn}<a class="btn btn-outline" href="shop.html">Continue Shopping</a></div>
-        ${hasCustom ? `<div class="panel order-card" style="margin-bottom:20px"><h2>${EH.icon('download')} Your Design Files</h2><p class="muted" style="font-size:13.5px;margin:-8px 0 12px">Print-ready files for your custom items${C2.whatsappNumber ? ' — please share them with us on WhatsApp' : ''}. They’re also available anytime under <a href="account.html" class="gold">My Orders</a>.</p>${EH.orderItemsHTML(order.items.filter((i) => i.custom), true)}</div>` : ''}
+        ${hasCustom ? `<div class="panel order-card" style="margin-bottom:20px"><h2>${EH.icon('download')} Your Design Files</h2><p class="muted" style="font-size:13.5px;margin:-8px 0 12px">${order.items.some((item) => item.custom3d) ? 'Your 3D mockup, design details, and uploaded original file (if provided) are saved with this order. Download them here or anytime under ' : 'Print-ready files for your custom items are available here and anytime under ' }<a href="account.html" class="gold">My Orders</a>.</p>${EH.orderItemsHTML(order.items.filter((i) => i.custom), true)}</div>` : ''}
         <div class="panel order-card"><h2>Order Summary</h2>${EH.orderItemsHTML(order.items)}<div style="margin-top:14px">${EH.totalsHTML(order.totals)}</div>
           <div class="form-grid" style="margin-top:20px;font-size:13px;color:var(--muted)">
             <div><b style="color:var(--text);display:block;margin-bottom:4px">Delivering to</b>${EH.esc(c.name)}<br>${EH.esc(c.address1)}${c.address2 ? ', ' + EH.esc(c.address2) : ''}<br>${EH.esc(c.city)}, ${EH.esc(c.state)} – ${EH.esc(c.pincode)}<br>${EH.esc(c.phone)}</div>
