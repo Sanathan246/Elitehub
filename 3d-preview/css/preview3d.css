@@ -5,6 +5,8 @@
    ===================================================================== */
 
 /* ---------- 3D studio layout ---------- */
+/* Netlify injects this fixed badge into hosted pages; keep it from covering studio controls. */
+body.p3d #nl-badge-frame, body.p3d iframe#nl-badge-frame { display: none !important; }
 .p3d-sidebar { display: flex; flex-direction: column; padding-bottom: 0; overflow: hidden; }
 .p3d-sidebar .studio-sidebar-heading { margin-bottom: 16px; }
 .p3d-panels { flex: 1; min-height: 0; overflow-y: auto; overscroll-behavior: contain; margin: 0 -22px; padding: 4px 22px 18px; scrollbar-width: thin; scrollbar-color: rgba(230,191,134,.3) transparent; }
@@ -102,10 +104,15 @@
 .p3d-status { display: flex; align-items: center; gap: 8px; margin: 0 0 10px; color: var(--muted); font-size: 11.5px; }
 .p3d-status-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--muted-2); }
 .p3d-status-dot.ok { background: var(--success); box-shadow: 0 0 8px rgba(103,211,154,.6); }
-.p3d-action-row { display: grid; grid-template-columns: auto 1fr; gap: 8px; }
-.p3d-action-row .btn { min-height: 42px; height: 42px; border-radius: 8px; font-size: 10.5px; letter-spacing: .08em; }
-.p3d-action-row .btn .ico, .p3d-actions .btn-block .ico { width: 15px; height: 15px; }
-.p3d-actions .btn-block { height: 44px; }
+.p3d-action-stack { display: grid; gap: 9px; }
+.p3d-save-preview-button { display: flex; align-items: center; justify-content: center; gap: 9px; width: 100%; min-height: 52px; padding: 0 16px; border: 1.5px solid var(--gold); border-radius: 9px; background: linear-gradient(145deg, rgba(230,191,134,.17), rgba(230,191,134,.08)); color: #f3d7ad; font-size: 12px; font-weight: 700; letter-spacing: .055em; box-shadow: inset 0 0 0 1px rgba(230,191,134,.08), 0 0 16px rgba(230,191,134,.08); transition: background .2s, box-shadow .2s, transform .2s; }
+.p3d-save-preview-button:hover { background: linear-gradient(145deg, rgba(230,191,134,.27), rgba(230,191,134,.13)); box-shadow: 0 0 20px rgba(230,191,134,.16); transform: translateY(-1px); }
+.p3d-save-preview-button:focus-visible { outline: 2px solid var(--gold-1); outline-offset: 3px; }
+.p3d-save-preview-button .ico { width: 18px; height: 18px; }
+.p3d-save-preview-button:disabled { opacity: .55; cursor: progress; transform: none; }
+.p3d-save-preview-block { height: 52px; }
+.p3d-action-stack .studio-add-button { min-height: 48px; height: 48px; border-radius: 9px; font-size: 11px; }
+.p3d-action-stack .studio-add-button .ico { width: 16px; height: 16px; }
 
 /* ---------- 3D stage ---------- */
 .p3d-stage { display: block; background: #0f1011; }

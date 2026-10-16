@@ -1065,11 +1065,11 @@ function renderActions() {
     ${sellable ? `
       <div class="studio-buy-total"><span>Subtotal</span><strong>${EH.money(unit * S.qty)}</strong></div>
       <label class="studio-qty"><span>Quantity</span><span><button type="button" data-qty="-1" aria-label="Decrease quantity">−</button><input type="number" min="1" max="20" value="${S.qty}" id="qty" aria-label="Quantity"><button type="button" data-qty="1" aria-label="Increase quantity">+</button></span></label>
-      <div class="p3d-action-row">
-        <button class="btn btn-ghost" type="button" data-act="save">${icon('heart')} Save</button>
+      <div class="p3d-action-stack">
+        <button class="btn p3d-save-preview-button" type="button" data-act="save" aria-label="Save this design to Your 3D Previews" title="Save this design to Your 3D Previews">${icon('heart')} Save Preview</button>
         <button class="btn btn-gold studio-add-button" type="button" data-act="bag">${icon('bag')} Buy now</button>
       </div>` : `
-      <button class="btn btn-gold btn-block studio-add-button" type="button" data-act="save">${icon('heart')} Save to Your 3D previews</button>
+      <button class="btn p3d-save-preview-button p3d-save-preview-block" type="button" data-act="save" aria-label="Save this design to Your 3D Previews" title="Save this design to Your 3D Previews">${icon('heart')} Save Preview</button>
     `}`;
   el.onclick = (e) => {
     const q = e.target.closest('[data-qty]');
