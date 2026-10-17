@@ -88,9 +88,8 @@ product's default colour, re-render its two images.
   be ordered as an existing store product. Before adding the cart item, the studio
   saves a customized GLB, the original uploaded file, a preview and design details
   in browser storage. At checkout, the GLB, uploaded source model, preview, and
-  design details are saved with the order in Firebase. Firestore rules must be
-  deployed for order records and the current file-storage fallback; Firebase
-  Storage rules are needed only when a Storage bucket is configured.
+  design details are saved in order-specific Firestore records. Deploy
+  `firestore.rules` separately because Netlify publishes only the website files.
 
 Keyboard: Delete removes the selected print (Design tab); arrow keys move between tabs.
 

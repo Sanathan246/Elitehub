@@ -2,9 +2,7 @@
 (async function () {
   const SDK_VERSION = '12.19.0';
   const savedFirebaseConfig = window.EH_CONFIG && window.EH_CONFIG.firebase ? window.EH_CONFIG.firebase : {};
-  const useFirestoreAssetFallback = savedFirebaseConfig.useFirestoreAssetFallback === true;
   const config = Object.assign({}, savedFirebaseConfig);
-  delete config.useFirestoreAssetFallback;
   const required = ['apiKey', 'authDomain', 'projectId', 'appId'];
   const missing = required.filter((key) => !String(config[key] || '').trim());
 
@@ -44,17 +42,15 @@
   }
 
   try {
-    const [appModule, authModule, firestoreModule, storageModule] = await Promise.all([
+    const [appModule, authModule, firestoreModule] = await Promise.all([
       import(`https://www.gstatic.com/firebasejs/${SDK_VERSION}/firebase-app.js`),
       import(`https://www.gstatic.com/firebasejs/${SDK_VERSION}/firebase-auth.js`),
-      import(`https://www.gstatic.com/firebasejs/${SDK_VERSION}/firebase-firestore.js`),
-      import(`https://www.gstatic.com/firebasejs/${SDK_VERSION}/firebase-storage.js`)
+      import(`https://www.gstatic.com/firebasejs/${SDK_VERSION}/firebase-firestore.js`)
     ]);
 
     const app = appModule.initializeApp(config);
     const auth = authModule.getAuth(app);
     const db = firestoreModule.getFirestore(app);
-    const storage = storageModule.getStorage(app);
     const persistenceReady = authModule.setPersistence(auth, authModule.browserLocalPersistence)
       .catch((error) => console.warn('Firebase browser persistence is unavailable.', error));
     let resolveAuthReady;
@@ -93,7 +89,7 @@
     async function uploadFirestoreAsset(uid, customizationId, assetName, blob, contentType, onProgress) {
       if (!(blob instanceof Blob) || !blob.size) throw new Error(`The ${assetName} file could not be prepared.`);
       if (assetName === 'sourceModel' && blob.size > FIRESTORE_SOURCE_MODEL_MAX_BYTES) throw new Error('Uploaded 3D models must be 20 MB or smaller.');
-      if (blob.size > FIRESTORE_ASSET_MAX_BYTES) throw new Error('A 3D design file is larger than the 100 MB free-storage fallback limit.');
+      if (blob.size > FIRESTORE_ASSET_MAX_BYTES) throw new Error('A 3D design file is larger than the 100 MB Firestore file limit.');
       const assetRef = firestoreAssetRef(uid, customizationId, assetName);
       const uploadId = `${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 12)}`;
       const bytes = new Uint8Array(await blob.arrayBuffer());
@@ -189,7 +185,6 @@
       app,
       auth,
       db,
-      storage,
       ready: Promise.all([persistenceReady, authReady]),
       currentUser: null,
       subscribeAuth(callback) {
@@ -378,21 +373,20 @@
         if (!uid || !auth.currentUser || auth.currentUser.uid !== uid) throw new Error('Sign in before placing an order for this 3D customization.');
         const customizationId = String(id || '');
         if (!/^[A-Za-z0-9_-]{1,120}$/.test(customizationId)) throw new Error('This customization ID is invalid. Please try again from the 3D studio.');
-        const base = `users/${uid}/customizations/${customizationId}`;
         const specs = {
-          mockup: ['mockup.glb', 'model/gltf-binary'],
-          details: ['details.json', 'application/json'],
-          preview: ['preview.png', 'image/png']
+          mockup: 'model/gltf-binary',
+          details: 'application/json',
+          preview: 'image/png'
         };
         const sourceModelName = String(metadata.sourceModelName || '').trim().slice(0, 160);
         if (sourceModelName) {
           const ext = (sourceModelName.split('.').pop() || '').toLowerCase();
           const sourceSpecs = {
-            glb: ['source-model.glb', 'model/gltf-binary'],
-            gltf: ['source-model.gltf', 'model/gltf+json'],
-            obj: ['source-model.obj', 'application/octet-stream'],
-            stl: ['source-model.stl', 'application/octet-stream'],
-            fbx: ['source-model.fbx', 'application/octet-stream']
+            glb: 'model/gltf-binary',
+            gltf: 'model/gltf+json',
+            obj: 'application/octet-stream',
+            stl: 'application/octet-stream',
+            fbx: 'application/octet-stream'
           };
           if (!sourceSpecs[ext]) throw new Error('The original 3D file type is not supported.');
           if (!(assets.sourceModel instanceof Blob) || !assets.sourceModel.size) throw new Error('The original uploaded 3D file could not be prepared.');
@@ -400,41 +394,14 @@
         }
         const paths = {};
         const onProgress = typeof options.onProgress === 'function' ? options.onProgress : null;
-        const saveToFirestore = async () => {
-          if (onProgress) onProgress({ phase: 'fallback', transport: 'firestore' });
-          await Promise.all(Object.entries(specs).map(async ([key, [, contentType]]) => {
-            paths[key] = await uploadFirestoreAsset(uid, customizationId, key, assets[key], contentType, onProgress);
-          }));
-        };
-        if (useFirestoreAssetFallback) {
-          await saveToFirestore();
-        } else {
-          let storageBucketMissing = false;
+        await Promise.all(Object.entries(specs).map(async ([key, contentType]) => {
           try {
-            await Promise.all(Object.entries(specs).map(async ([key, [filename, contentType]]) => {
-              const blob = assets[key];
-              if (!(blob instanceof Blob) || !blob.size) throw new Error(`The ${key} file could not be prepared.`);
-              if (key === 'sourceModel' && blob.size > FIRESTORE_SOURCE_MODEL_MAX_BYTES) throw new Error('Uploaded 3D models must be 20 MB or smaller.');
-              if (blob.size > FIRESTORE_ASSET_MAX_BYTES) throw new Error(`The ${filename} file is larger than the 100 MB upload limit.`);
-              const path = `${base}/${filename}`;
-              const task = storageModule.uploadBytesResumable(storageModule.ref(storage, path), blob, {
-                contentType,
-                customMetadata: { ownerUid: uid, customizationId }
-              });
-              await new Promise((resolve, reject) => {
-                task.on('state_changed', (snapshot) => {
-                  if (onProgress) onProgress({ assetName: key, loadedBytes: snapshot.bytesTransferred, totalBytes: snapshot.totalBytes, transport: 'storage' });
-                }, reject, resolve);
-              });
-              paths[key] = path;
-            }));
+            paths[key] = await uploadFirestoreAsset(uid, customizationId, key, assets[key], contentType, onProgress);
           } catch (error) {
-            const fallbackCodes = ['storage/bucket-not-found', 'storage/no-default-bucket', 'storage/project-not-found', 'storage/unauthorized', 'storage/unknown'];
-            if (!fallbackCodes.includes(String(error?.code || ''))) throw error;
-            storageBucketMissing = true;
+            error.assetName = key;
+            throw error;
           }
-          if (storageBucketMissing) await saveToFirestore();
-        }
+        }));
         const data = {
           id: customizationId,
           ownerUid: uid,
@@ -486,13 +453,7 @@
           if (!firestoreAsset) throw new Error('This mockup file does not belong to your account.');
           return downloadFirestoreAsset(uid, firestoreAsset.customizationId, firestoreAsset.assetName);
         }
-        if (!assetPath.startsWith(`users/${uid}/customizations/`)) throw new Error('This mockup file does not belong to your account.');
-        const bytes = await storageModule.getBytes(storageModule.ref(storage, assetPath), 100 * 1024 * 1024);
-        const type = assetPath.endsWith('.glb') ? 'model/gltf-binary'
-          : assetPath.endsWith('.gltf') ? 'model/gltf+json'
-            : assetPath.endsWith('.json') ? 'application/json'
-              : assetPath.endsWith('.png') ? 'image/png' : 'application/octet-stream';
-        return new Blob([bytes], { type });
+        throw new Error('This order uses an unsupported file location. Ask the store to review the order files.');
       }
     };
 

@@ -179,11 +179,15 @@
       const purchased = [];
       for (const item of order.items.filter((entry) => entry.custom3d)) {
         item.customizationOwnerUid = user.uid;
+        const sourceCustomizationId = String(item.customId || '');
+        if (!/^[A-Za-z0-9_-]{1,120}$/.test(sourceCustomizationId)) {
+          throw new Error(`The 3D design ID for ${item.name || 'your custom product'} is invalid. Reopen the 3D studio and add it to your bag again.`);
+        }
         const [mockup, detailsFile, preview, sourceModel] = await Promise.all([
-          EH.files.get(`mockup:${item.customId}`),
-          EH.files.get(`details:${item.customId}`),
-          EH.files.get(`previewBlob:${item.customId}`),
-          item.sourceModelName ? EH.files.get(item.sourceModelKey || `sourceModel:${item.customId}`) : Promise.resolve(null),
+          EH.files.get(`mockup:${sourceCustomizationId}`),
+          EH.files.get(`details:${sourceCustomizationId}`),
+          EH.files.get(`previewBlob:${sourceCustomizationId}`),
+          item.sourceModelName ? EH.files.get(item.sourceModelKey || `sourceModel:${sourceCustomizationId}`) : Promise.resolve(null),
         ]);
         if (!(mockup instanceof Blob) || !(detailsFile instanceof Blob) || !(preview instanceof Blob)) {
           throw new Error(`The 3D mockup files for ${item.name || 'your custom product'} are missing from this browser. Reopen the 3D studio and add the design to your bag again.`);
@@ -197,8 +201,15 @@
         if (item.sourceModelName && !(sourceModel instanceof Blob)) {
           throw new Error('The original 3D file for ' + (item.name || 'your custom product') + ' is missing from this browser. Return to the 3D studio, upload the model again, and add it to your bag.');
         }
+        // Keep each order's files immutable and separate from any earlier order
+        // made from the same studio design.
+        const orderSuffix = String(order.id || '').replace(/[^A-Za-z0-9_-]/g, '').slice(0, 40);
+        if (!orderSuffix) throw new Error('The order ID is invalid. Refresh checkout and try again.');
+        const orderCustomizationId = `${sourceCustomizationId.slice(0, 120 - orderSuffix.length - 1)}_${orderSuffix}`;
+        item.customId = orderCustomizationId;
         const purchasedDetails = new Blob([JSON.stringify({
           ...details,
+          id: orderCustomizationId,
           order: {
             id: order.id,
             date: order.date,
@@ -239,15 +250,11 @@
             const uploadedByAsset = new Map();
             const paths = await api.saveCustomization(user.uid, entry.item.customId, entry.metadata, entry.assets, {
               onProgress(event) {
-                if (event.phase === 'fallback') {
-                  onProgress(0, 'Using secure Firestore cloud file storage…', true);
-                  return;
-                }
                 const prior = uploadedByAsset.get(event.assetName) || 0;
                 const loaded = Math.min(Number(event.totalBytes) || Number(event.loadedBytes) || prior, Math.max(prior, Number(event.loadedBytes) || 0));
                 uploadedByAsset.set(event.assetName, loaded);
                 const itemBytes = Array.from(uploadedByAsset.values()).reduce((sum, bytes) => sum + bytes, 0);
-                onProgress(totalBytes ? Math.min(1, (completedBytes + itemBytes) / totalBytes) : 1, 'Saving your GLB and design files…');
+                onProgress(totalBytes ? Math.min(1, (completedBytes + itemBytes) / totalBytes) : 1, 'Saving your GLB and design files to Firestore…');
               }
             });
             entry.item.customizationFiles = paths;
@@ -360,9 +367,8 @@
           failureStage = hasCustom3d ? 'design-files' : 'order';
           const filePlan = await preparePurchasedCustomizations(orderUser, order);
           if (filePlan.totalBytes) {
-            await filePlan.save(firebaseApi, (fraction, message, switchingStore) => {
+            await filePlan.save(firebaseApi, (fraction, message) => {
               setProgress(8 + fraction * 77, message);
-              if (switchingStore) setStatus(message);
             });
           }
           failureStage = 'order';
@@ -406,14 +412,13 @@
       } catch (error) {
         if (whatsappWindow) whatsappWindow.close();
         if (error.message !== 'Payment was cancelled — your bag is still saved.') console.error('Order could not be placed.', error);
-        const message = String(error?.code || '').startsWith('storage/')
-          ? 'The store could not save your 3D design files to cloud storage. Your order was not placed; please try again later.'
-          : ['resource-exhausted', 'firestore/resource-exhausted'].includes(String(error?.code || ''))
-            ? 'The free cloud storage quota is full. Your order was not placed; contact the store to clear space or choose another storage option.'
+        const deniedFile = ({ mockup: 'generated GLB', details: 'design details', preview: 'preview image', sourceModel: 'uploaded original model' })[error?.assetName] || '3D design files';
+        const message = ['resource-exhausted', 'firestore/resource-exhausted'].includes(String(error?.code || ''))
+          ? 'Firestore could not save the order files because its storage or write quota was reached. The order was not placed.'
           : ['permission-denied', 'firestore/permission-denied'].includes(error?.code)
             ? failureStage === 'design-files'
-              ? 'The store blocked the 3D file upload. Your order was not placed; please refresh and try again. If it keeps happening, contact the store.'
-              : 'The store could not save your order. Please contact us so we can fix this.'
+              ? `Firestore refused access to the ${deniedFile}, so the order was not placed. The deployed Firestore rules must allow signed-in customers to save their own order files.`
+              : 'Firestore refused to save your order. Please contact the store so the order rules can be checked.'
             : (error?.message || 'Your order could not be saved. Please try again.');
         setStatus(message, 'err');
         setProgress(progressHighWater, orderSaved ? 'Order saved; payment needs attention.' : 'Order not placed. Please try again.', true);

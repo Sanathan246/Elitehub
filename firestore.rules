@@ -20,11 +20,12 @@ service cloud.firestore {
 
   function customizationHasOrderById(userId, customizationId) {
     let customizationPath = /databases/$(database)/documents/users/$(userId)/customizations/$(customizationId);
-    return exists(customizationPath)
-      && 'orderId' in get(customizationPath).data
-      && get(customizationPath).data.orderId is string
-      && get(customizationPath).data.orderId.size() > 0
-      && exists(/databases/$(database)/documents/users/$(userId)/orders/$(get(customizationPath).data.orderId));
+    let customization = get(customizationPath);
+    return customization != null
+      && 'orderId' in customization.data
+      && customization.data.orderId is string
+      && customization.data.orderId.size() > 0
+      && exists(/databases/$(database)/documents/users/$(userId)/orders/$(customization.data.orderId));
   }
 
   function adminOrderUpdate() {
@@ -54,18 +55,8 @@ service cloud.firestore {
   }
 
   function validOrderAssetPath(userId, customizationId, assetName, path) {
-    let storageBase = 'users/' + userId + '/customizations/' + customizationId + '/';
-    return path is string && (
-      path == 'firestore://' + userId + '/' + customizationId + '/' + assetName
-      || (assetName == 'mockup' && path == storageBase + 'mockup.glb')
-      || (assetName == 'details' && path == storageBase + 'details.json')
-      || (assetName == 'preview' && path == storageBase + 'preview.png')
-      || (assetName == 'sourceModel' && path in [
-        storageBase + 'source-model.glb', storageBase + 'source-model.gltf',
-        storageBase + 'source-model.obj', storageBase + 'source-model.stl',
-        storageBase + 'source-model.fbx'
-      ])
-    );
+    return path is string
+      && path == 'firestore://' + userId + '/' + customizationId + '/' + assetName;
   }
 
   function validOrderCustomization(userId, orderId, customizationId) {
