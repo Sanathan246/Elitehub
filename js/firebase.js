@@ -31,9 +31,7 @@
     subscribeAllOrders() { return () => {}; },
     updateOrder() { return Promise.reject(unavailableError()); },
     saveCustomization() { return Promise.reject(unavailableError()); },
-    listCustomizations() { return Promise.resolve([]); },
     getCustomization() { return Promise.resolve(null); },
-    deleteCustomization() { return Promise.reject(unavailableError()); },
     downloadCustomizationAsset() { return Promise.reject(unavailableError()); }
   });
 
@@ -377,9 +375,9 @@
         return firestoreModule.updateDoc(firestoreModule.doc(db, 'users', uid, 'orders', orderId), data);
       },
       async saveCustomization(uid, id, metadata = {}, assets = {}, options = {}) {
-        if (!uid || !auth.currentUser || auth.currentUser.uid !== uid) throw new Error('Sign in to save this 3D mockup to your account.');
+        if (!uid || !auth.currentUser || auth.currentUser.uid !== uid) throw new Error('Sign in before placing an order for this 3D customization.');
         const customizationId = String(id || '');
-        if (!/^[A-Za-z0-9_-]{1,120}$/.test(customizationId)) throw new Error('This customization ID is invalid. Save the preview again.');
+        if (!/^[A-Za-z0-9_-]{1,120}$/.test(customizationId)) throw new Error('This customization ID is invalid. Please try again from the 3D studio.');
         const base = `users/${uid}/customizations/${customizationId}`;
         const specs = {
           mockup: ['mockup.glb', 'model/gltf-binary'],
@@ -454,7 +452,6 @@
           quantity: Math.max(1, Math.min(20, Number(metadata.quantity) || 1)),
           unitPrice: Math.max(0, Number(metadata.unitPrice) || 0),
           summary: String(metadata.summary || '').slice(0, 1000),
-          previewId: String(metadata.previewId || '').slice(0, 120),
           orderId: String(metadata.orderId || '').slice(0, 120),
           sourceModelName,
           assets: paths,
@@ -472,44 +469,9 @@
         const isOwner = !!current && current.uid === uid;
         const isAdmin = !!current && current.emailVerified && adminEmail
           && String(current.email || '').trim().toLowerCase() === adminEmail;
-        if (!uid || (!isOwner && !isAdmin)) throw new Error('Sign in to open this saved mockup.');
+        if (!uid || (!isOwner && !isAdmin)) throw new Error('Sign in to access this custom 3D order.');
         const snapshot = await firestoreModule.getDoc(firestoreModule.doc(db, 'users', uid, 'customizations', String(id || '')));
         return snapshot.exists() ? Object.assign({ id: snapshot.id }, snapshot.data()) : null;
-      },
-      async listCustomizations(uid) {
-        const current = auth.currentUser;
-        const adminEmail = String(window.EH_CONFIG?.adminEmail || '').trim().toLowerCase();
-        const isOwner = !!current && current.uid === uid;
-        const isAdmin = !!current && current.emailVerified && adminEmail
-          && String(current.email || '').trim().toLowerCase() === adminEmail;
-        if (!uid || (!isOwner && !isAdmin)) throw new Error('Sign in to view saved 3D previews.');
-        const snapshot = await firestoreModule.getDocs(firestoreModule.collection(db, 'users', uid, 'customizations'));
-        return snapshot.docs.map((doc) => Object.assign({ id: doc.id }, doc.data()));
-      },
-      async deleteCustomization(uid, id) {
-        const current = auth.currentUser;
-        const isOwner = !!current && current.uid === uid;
-        if (!uid || !isOwner) throw new Error('Sign in to delete this saved 3D preview.');
-        const customizationId = String(id || '');
-        const docRef = firestoreModule.doc(db, 'users', uid, 'customizations', customizationId);
-        const snapshot = await firestoreModule.getDoc(docRef);
-        if (!snapshot.exists()) return false;
-        const record = snapshot.data();
-        if (record.orderId) throw new Error('Files already attached to an order cannot be deleted here.');
-        await Promise.all(Object.values(record.assets || {}).map(async (path) => {
-          const firestoreAsset = parseFirestoreAssetPath(uid, path);
-          if (firestoreAsset && firestoreAsset.customizationId === customizationId) {
-            await deleteFirestoreAssetChunks(uid, customizationId, firestoreAsset.assetName);
-            await firestoreModule.deleteDoc(firestoreAssetRef(uid, customizationId, firestoreAsset.assetName));
-            return;
-          }
-          if (typeof path === 'string' && path.startsWith(`users/${uid}/customizations/`)) {
-            try { await storageModule.deleteObject(storageModule.ref(storage, path)); }
-            catch (error) { if (error?.code !== 'storage/object-not-found') throw error; }
-          }
-        }));
-        await firestoreModule.deleteDoc(docRef);
-        return true;
       },
       async downloadCustomizationAsset(uid, path) {
         const current = auth.currentUser;

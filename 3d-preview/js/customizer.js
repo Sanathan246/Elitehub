@@ -2,8 +2,7 @@
  * Wires the panels on 3d-preview/customizer.html to the Studio engine.
  *
  * URL options:
- *   ?id=<previewId>     reopen a saved preview (from Your account > Your 3D previews)
- *   ?template=<product>   start on a product
+ *   ?template=<product> start on a product
  *   ?start=upload       open on the "upload your 3D file" choice
  */
 import { Studio, BACKDROPS, LIGHTING, VIEWS } from './studio/studio.js';
@@ -12,7 +11,6 @@ import {
   GLOSS_FINISHES, CUSHION_FINISHES, ACCEPTED_EXTENSIONS, MAX_UPLOAD_MB, ModelFileError,
 } from './studio/models.js';
 import { TEXT_FONTS } from './studio/textures.js';
-import * as store from './store.js';
 
 const EH = window.EH;
 const $ = (s, r = document) => r.querySelector(s);
@@ -26,12 +24,7 @@ const thumbSrc = (id) => `3d-preview/assets/products/${id}.jpg`;
 const DEFAULT_NAME = 'Elite Hub 3D Studio';
 
 const S = {
-  previewId: null,
-  cloudPaths: null,
-  cloudSynced: false,
-  cloudOwnerUid: null,
   name: DEFAULT_NAME,
-  folderId: null,
   tab: 'product',
   designLayout: 'front',
   size: null,
@@ -41,10 +34,7 @@ const S = {
   qty: 1,
   dirty: false,
   loading: false,
-  exportShape: 'square',
-  exportRes: 2048,
-  exportTransparent: false,
-  videoSeconds: 8,
+  glbExporting: false,
 };
 
 const DESIGN_LAYOUTS = [
@@ -112,7 +102,6 @@ let backgroundRemovalPipeline;
 let leavingOnPurpose = false;
 
 async function init() {
-  store.followAuth();
   studio = new Studio($('#stage'));
   window.EHStudio = studio; // handy for debugging in the console
 
@@ -139,34 +128,8 @@ async function init() {
 
   window.addEventListener('beforeunload', (e) => { if (S.dirty && !leavingOnPurpose) { e.preventDefault(); e.returnValue = ''; } });
   document.addEventListener('keydown', onKeyDown);
-  store.onChange(() => { if (S.previewId) renderActions(); });
 
-  const id = params.get('id');
   const template = params.get('template') || params.get('product');
-  if (id) {
-    await authSettled();
-    let rec = await store.getPreview(id);
-    let cloudOpenError = null;
-    if (!rec) {
-      try {
-        rec = await loadCloudPreview(id);
-        if (rec) await store.savePreview(rec);
-      } catch (error) {
-        cloudOpenError = error;
-        console.warn('Saved cloud preview could not be opened.', error);
-        EH.toast(error.message || 'This saved preview could not be opened.', { type: 'error', duration: 6000 });
-      }
-    }
-    if (rec) {
-      try { await openSaved(rec); return; }
-      catch (error) {
-        cloudOpenError = error;
-        console.error('Saved preview could not be opened.', error);
-        EH.toast(error.message || 'This saved preview could not be opened.', { type: 'error', duration: 6000 });
-      }
-    }
-    if (!cloudOpenError) EH.toast("That preview isn't saved on this device or account. Sign in to open cloud previews.", { type: 'error' });
-  }
   const requestedTemplate = template === 'tshirt' ? 'tee' : template;
   const activeTemplate = TEMPLATES.some((t) => t.id === requestedTemplate) ? requestedTemplate : 'tee';
   await withLoading('Loading model', () => studio.loadTemplate(activeTemplate));
@@ -207,79 +170,6 @@ async function init() {
   if (!template) openStartChooser({ focusUpload: params.get('start') === 'upload' });
 }
 
-/* Firebase decides which account's previews we can open; give it a moment. */
-function authSettled() {
-  const api = window.EHFirebase;
-  if (api) return Promise.race([api.ready, wait(4000)]);
-  return new Promise((resolve) => {
-    const done = () => { const a = window.EHFirebase; (a ? Promise.race([a.ready, wait(4000)]) : Promise.resolve()).then(resolve); };
-    document.addEventListener('firebase:ready', done, { once: true });
-    setTimeout(resolve, 5000);
-  });
-}
-const wait = (ms) => new Promise((r) => setTimeout(r, ms));
-
-async function loadCloudPreview(id) {
-  const api = window.EHFirebase;
-  if (!api?.enabled) return null;
-  await api.ready;
-  const user = api.currentUser;
-  if (!user) return null;
-  const record = await api.getCustomization(user.uid, id);
-  if (!record || record.orderId || !record.assets?.details || !record.assets?.preview) return null;
-  const [detailsBlob, previewBlob] = await Promise.all([
-    api.downloadCustomizationAsset(user.uid, record.assets.details),
-    api.downloadCustomizationAsset(user.uid, record.assets.preview),
-  ]);
-  if (api.currentUser?.uid !== user.uid || store.currentOwner() !== user.uid) throw new Error('Your signed-in account changed while the preview was loading. Please try again.');
-  const details = JSON.parse(await detailsBlob.text());
-  if (!details.state || typeof details.state !== 'object') throw new Error('The saved preview is missing its design details.');
-  const thumbnail = await new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onload = () => resolve(String(reader.result || ''));
-    reader.onerror = () => reject(reader.error || new Error('The preview image could not be read.'));
-    reader.readAsDataURL(previewBlob);
-  });
-  return {
-    id: String(record.previewId || record.id || id),
-    name: record.name || details.name || 'Saved 3D preview',
-    product: record.product || details.product || '3D preview',
-    kind: record.kind || details.kind || 'product',
-    orderType: record.orderType || details.orderType || details.productType || null,
-    orderColor: record.orderColor || details.orderColor || null,
-    thumbnail,
-    state: details.state,
-    fileName: record.sourceModelName || details.sourceModelName || details.state.model?.fileName || null,
-    cloudPaths: record.assets,
-    cloudSynced: true,
-    cloudOwnerUid: user.uid,
-  };
-}
-
-async function openSaved(rec) {
-  let file = rec.file || null;
-  if (!file && rec.state?.model?.kind === 'upload' && rec.cloudPaths?.sourceModel && rec.cloudOwnerUid) {
-    const api = window.EHFirebase;
-    await api?.ready;
-    file = await api.downloadCustomizationAsset(rec.cloudOwnerUid, rec.cloudPaths.sourceModel);
-  }
-  if (rec.state?.model?.kind === 'upload' && !(file instanceof Blob)) {
-    throw new Error('The original uploaded 3D model is unavailable. Reopen it on the device where it was uploaded, then save it again while signed in.');
-  }
-  await withLoading('Opening your preview', () => studio.setState(rec.state, file));
-  S.previewId = rec.id;
-  S.name = rec.name;
-  S.folderId = rec.folderId || null;
-  S.cloudPaths = rec.cloudPaths || null;
-  S.cloudSynced = !!rec.cloudSynced;
-  S.cloudOwnerUid = rec.cloudOwnerUid || null;
-  S.orderType = rec.orderType || null;
-  S.orderColor = rec.orderColor || null;
-  resetOptions();
-  S.dirty = false;
-  renderAll();
-}
-
 /* ------------------------------------------------------------------ */
 /* Tabs                                                                */
 /* ------------------------------------------------------------------ */
@@ -306,8 +196,6 @@ function bindLayoutToolbar() {
     try {
       if (action === 'add-text') return addTextFromToolbar();
       if (action === 'upload') return $('#artInput').click();
-      if (action === 'save') return save();
-      if (action === 'load') return openSavedLayoutChooser();
       if (action === 'reset') return resetDesignLayers();
     } catch (error) {
       console.error(error);
@@ -355,25 +243,6 @@ function addTextFromToolbar() {
       font: $('#layoutFont', modal).value,
       presetId: layoutPreset()?.id,
     });
-  });
-}
-
-async function openSavedLayoutChooser() {
-  const previews = await store.listPreviews();
-  if (!previews.length) return EH.toast('There are no saved layouts on this account yet.');
-  const modal = EH.modal.open(`
-    <h3>Load a saved layout</h3>
-    <p class="muted p3d-modal-lead">Choose one of your saved 3D designs.</p>
-    <div class="p3d-saved-layouts">${previews.map((preview) => `<button type="button" class="p3d-saved-layout" data-load-layout="${esc(preview.id)}"><img src="${esc(preview.thumbnail || '')}" alt=""><span><b>${esc(preview.name)}</b><small>${esc(preview.product || 'Custom product')}</small></span></button>`).join('')}</div>`);
-  modal.addEventListener('click', async (event) => {
-    const button = event.target.closest('[data-load-layout]');
-    if (!button) return;
-    const preview = await store.getPreview(button.dataset.loadLayout);
-    if (!preview) return EH.toast('That saved layout is no longer available.', { type: 'error' });
-    if (!(await confirmDiscard())) return;
-    EH.modal.close();
-    await openSaved(preview);
-    setTab('design');
   });
 }
 
@@ -445,7 +314,7 @@ function resetOptions() {
   S.model = d.model;
   if (type === 'phonecase') {
     const savedModel = studio.model?.params?.phoneModel;
-    const requestedModel = params.has('id') ? savedModel : (params.get('model') || savedModel);
+    const requestedModel = params.get('model') || savedModel;
     S.model = EH.types.phonecase.models.includes(requestedModel) ? requestedModel : (d.model || EH.types.phonecase.models[0]);
     if (kind() !== 'upload' && studio.model?.params?.phoneModel !== S.model) studio.setParams({ phoneModel: S.model });
   }
@@ -534,7 +403,7 @@ function renderProduct() {
   if (k === 'mug') {
     options += `<p class="p3d-note">330 ml ceramic, microwave and dishwasher safe. Prints wrap around the side, so check the edges in the 3/4 view.</p>`;
   } else if (tpl()?.garment && !type) {
-    options += `<p class="p3d-note">Preview only for now: this style isn't in the EliteHub shop yet. You can still design it, save it and download images.</p>`;
+    options += `<p class="p3d-note">Preview only for now: this style isn't in the EliteHub shop yet. You can still design it and export the GLB.</p>`;
   } else if (k === 'upload') {
     options += `<button class="btn btn-ghost btn-sm" type="button" data-act="replace">${icon('upload')} Replace file</button>
       <p class="p3d-note">Textures must be inside the file. If your model looks grey, export it as .glb with textures embedded.</p>`;
@@ -559,7 +428,7 @@ function renderProduct() {
       <strong>Upload a 3D file</strong>
       <span>GLB, GLTF, OBJ, STL or FBX, up to ${MAX_UPLOAD_MB} MB</span>
     </button>
-    <p class="p3d-note">Your original file is included with your order. Save the preview to your account to sync it across devices.</p>`;
+    <p class="p3d-note">Your original 3D file is included with your order.</p>`;
 
   el.onclick = async (e) => {
     const t = e.target.closest('[data-template]');
@@ -795,7 +664,7 @@ function renderFinish() {
     const cat = catalogueColorId();
     const what = k === 'frame' ? 'Frame colour' : 'Colour';
     html += `<div class="opt-block p3d-opt"><div class="opt-label"><span>${what}: <b data-colour-name>${cat ? EH.colors[cat].name : 'Custom'}</b></span></div>${swatches(list, a.color)}
-      ${shopType() ? `<p class="p3d-note" data-colour-note ${cat ? 'hidden' : ''}>Custom colours are for previews. Pick a colour above to order this ${esc(tpl().label.toLowerCase())}.</p>` : ''}</div>`;
+      ${shopType() ? `<p class="p3d-note" data-colour-note ${cat ? 'hidden' : ''}>Custom colours are for visualisation only. Pick a colour above to order this ${esc(tpl().label.toLowerCase())}.</p>` : ''}</div>`;
     const fin = tpl()?.garment ? FABRIC_FINISHES : { mug: MUG_FINISHES, phonecase: GLOSS_FINISHES, cushion: CUSHION_FINISHES }[k];
     if (fin) {
       html += `<div class="opt-block p3d-opt"><div class="opt-label"><span>${tpl()?.garment || k === 'cushion' ? 'Fabric' : k === 'mug' ? 'Glaze' : 'Finish'}</span></div>
@@ -859,7 +728,7 @@ function renderScene() {
       <div class="swatches">${BACKDROPS.map((b) => `<button type="button" class="swatch p3d-backdrop ${s.backdrop === b.id ? 'active' : ''}" data-backdrop="${b.id}" aria-label="${esc(b.label)}" title="${esc(b.label)}"><span style="background:${b.id === 'transparent' ? 'repeating-conic-gradient(#3a3a3a 0 25%,#202020 0 50%) 50%/10px 10px' : `radial-gradient(circle at 45% 35%, ${b.inner}, ${b.outer})`}"></span></button>`).join('')}
         <label class="swatch p3d-custom-swatch ${custom ? 'active' : ''}" title="Custom backdrop"><span style="background:${custom ? s.backdrop : 'conic-gradient(#e6bf86,#6b4cf0,#1f2746,#5c1d28,#e6bf86)'}"></span><input type="color" value="${custom ? s.backdrop : '#2a2233'}" data-backdrop-color aria-label="Custom backdrop colour"></label>
       </div>
-      <p class="p3d-note">Studio dark matches the lighting in your reference video. Transparent backgrounds apply to PNG downloads.</p>
+      <p class="p3d-note">Studio dark matches the lighting in your reference video. Transparent backgrounds affect the preview; GLB exports contain the product and design.</p>
     </div>
     <div class="opt-block p3d-opt"><div class="opt-label"><span>Lighting</span></div>${seg('lighting', LIGHTING, s.lighting, 'Lighting')}</div>
     <label class="check p3d-check"><input type="checkbox" data-floor ${s.floor ? 'checked' : ''}> Soft shadow under the product</label>
@@ -902,63 +771,25 @@ function renderViews() {
 /* ------------------------------------------------------------------ */
 /* Export tab                                                          */
 /* ------------------------------------------------------------------ */
-const SHAPES = [{ id: 'square', label: 'Square', r: [1, 1] }, { id: 'landscape', label: 'Landscape', r: [16, 9] }, { id: 'portrait', label: 'Portrait', r: [4, 5] }];
-const RES = [{ id: 1080, label: 'HD' }, { id: 2048, label: '2K' }, { id: 4096, label: '4K' }];
-const DURATIONS = [{ id: 4, label: '4 s' }, { id: 8, label: '8 s' }, { id: 12, label: '12 s' }];
-
-function exportSize(longSide) {
-  const r = SHAPES.find((s) => s.id === S.exportShape).r;
-  const k = longSide / Math.max(...r);
-  return [Math.round(r[0] * k / 2) * 2, Math.round(r[1] * k / 2) * 2];
-}
-
 function renderExport() {
   const el = $('#panel-export');
-  const rec = Studio.recordingSupport();
   el.innerHTML = `
-    <div class="field"><label for="previewName">Preview name</label><input class="input" id="previewName" maxlength="80" value="${esc(S.name)}"></div>
-    <h3 class="p3d-h">Image</h3>
-    <div class="opt-block p3d-opt"><div class="opt-label"><span>Shape</span></div>${seg('shape', SHAPES, S.exportShape, 'Image shape')}</div>
-    <div class="opt-block p3d-opt"><div class="opt-label"><span>Resolution</span><span class="muted" data-res-out>${exportSize(S.exportRes).join(' × ')} px</span></div>${seg('res', RES, S.exportRes, 'Resolution')}</div>
-    <label class="check p3d-check"><input type="checkbox" data-transparent ${S.exportTransparent ? 'checked' : ''}> Transparent background</label>
-    <button class="btn btn-outline btn-block" type="button" data-act="png">${icon('download')} Download image (PNG)</button>
-    <button class="btn btn-outline btn-block" type="button" data-act="glb">${icon('download')} Download 3D mockup (.GLB)</button>
-    <button class="btn btn-outline btn-block" type="button" data-act="details">${icon('download')} Download design details (.JSON)</button>
-    <h3 class="p3d-h">360° video</h3>
-    <div class="opt-block p3d-opt"><div class="opt-label"><span>Length</span></div>${seg('dur', DURATIONS, S.videoSeconds, 'Video length')}</div>
-    <button class="btn btn-outline btn-block" type="button" data-act="video" ${rec ? '' : 'disabled'}>${icon('sparkles')} Record 360° video</button>
-    <p class="p3d-note">${rec ? `One full turn at 30 fps, saved as .${rec.ext}. Uses the backdrop from Scene.` : 'This browser cannot record video. Try Chrome, Edge or Safari 17+.'}</p>
+    <div class="field"><label for="glbName">GLB file name</label><input class="input" id="glbName" maxlength="80" value="${esc(S.name)}"></div>
+    <h3 class="p3d-h">High-quality 3D export</h3>
+    <p class="p3d-note">Download a self-contained GLB with the model, selected finish, and artwork embedded.</p>
+    <button class="btn btn-outline btn-block" type="button" data-act="glb">${icon('download')} Export high-quality GLB</button>
     `;
 
   el.oninput = (e) => {
-    if (e.target.id === 'previewName') {
+    if (e.target.id === 'glbName') {
       S.name = e.target.value.trim() || DEFAULT_NAME;
-
       markDirty();
     }
   };
-  el.onchange = (e) => { if (e.target.matches('[data-transparent]')) S.exportTransparent = e.target.checked; };
-  el.onclick = async (e) => {
-    const sh = e.target.closest('[data-shape]');
-    if (sh) { S.exportShape = sh.dataset.shape; return renderExport(); }
-    const r = e.target.closest('[data-res]');
-    if (r) { S.exportRes = Number(r.dataset.res); return renderExport(); }
-    const d = e.target.closest('[data-dur]');
-    if (d) { S.videoSeconds = Number(d.dataset.dur); return renderExport(); }
+  el.onclick = (e) => {
     const act = e.target.closest('[data-act]')?.dataset.act;
-    if (act === 'png') downloadPng();
     if (act === 'glb') downloadGlb();
-    if (act === 'details') downloadDetails();
-    if (act === 'video') recordVideo();
   };
-}
-
-async function downloadPng() {
-  const [w, h] = exportSize(S.exportRes);
-  const blob = await studio.capture({ width: w, height: h, transparent: S.exportTransparent || studio.settings.backdrop === 'transparent' });
-  if (!blob) return EH.toast('The image could not be created. Try a smaller resolution.', { type: 'error' });
-  EH.download(blob, `${slug(S.name)}-${w}x${h}.png`);
-  EH.toast('Image downloaded');
 }
 
 function customizationDetails(id, order = null) {
@@ -971,7 +802,6 @@ function customizationDetails(id, order = null) {
   return {
     version: 1,
     customizationId: id,
-    previewId: S.previewId,
     orderId: order?.id || null,
     name: S.name,
     product: type ? EH.types[type].label : productLabel(),
@@ -1010,203 +840,54 @@ function glbMetadata(details) {
 }
 
 async function downloadGlb() {
+  if (S.glbExporting) return;
+  S.glbExporting = true;
+  const buttons = $$('[data-act="glb"]');
+  const previousMarkup = buttons.map((button) => button.innerHTML);
+  buttons.forEach((button) => { button.disabled = true; button.setAttribute('aria-busy', 'true'); button.textContent = 'Preparing GLB…'; });
   try {
-    const details = customizationDetails(S.previewId || EH.uid());
+    const details = customizationDetails(EH.uid());
     const mockup = await studio.exportGlb({ name: S.name, ...glbMetadata(details) });
     EH.download(mockup, `${slug(S.name)}.glb`);
-    EH.toast('3D mockup downloaded');
+    EH.toast('High-quality GLB downloaded');
   } catch (error) {
     console.error('3D mockup export failed.', error);
     EH.toast(error.message || 'The 3D mockup could not be exported.', { type: 'error' });
-  }
-}
-
-function downloadDetails() {
-  const id = S.previewId || EH.uid();
-  const details = new Blob([JSON.stringify(customizationDetails(id), null, 2)], { type: 'application/json' });
-  EH.download(details, `${slug(S.name)}-details.json`);
-  EH.toast('Design details downloaded');
-}
-
-let recordAbort = null;
-async function recordVideo() {
-  const [w, h] = exportSize(1080);
-  recordAbort = new AbortController();
-  $('#recording').hidden = false;
-  $('#recordBar').style.width = '0%';
-  try {
-    const { blob, ext } = await studio.recordTurntable({
-      seconds: S.videoSeconds, width: w, height: h, signal: recordAbort.signal,
-      onProgress: (t) => { $('#recordBar').style.width = `${Math.round(t * 100)}%`; $('#recordText').textContent = `Recording 360° video, ${Math.round(t * 100)}%`; },
-    });
-    EH.download(blob, `${slug(S.name)}-360.${ext}`);
-    EH.toast('Video downloaded');
-  } catch (err) {
-    if (err.name !== 'AbortError') EH.toast(err.message || 'Recording failed.', { type: 'error' });
   } finally {
-    $('#recording').hidden = true;
-    $('#recordText').textContent = 'Recording 360° video';
-    recordAbort = null;
+    buttons.forEach((button, index) => {
+      button.disabled = false;
+      button.removeAttribute('aria-busy');
+      button.innerHTML = previousMarkup[index];
+    });
+    S.glbExporting = false;
   }
 }
 
 /* ------------------------------------------------------------------ */
-/* Save + add to bag                                                   */
-/* ------------------------------------------------------------------ */
+/* Export + order actions */
 function renderActions() {
   const el = $('#actions');
   const type = shopType();
-  const cat = catalogueColorId();
-  const sellable = type && cat;
-  const status = !S.previewId ? 'Not saved yet' : S.dirty ? 'Unsaved changes' : 'Saved to Your 3D previews';
+  const sellable = !!(type && catalogueColorId());
   const unit = type ? EH.types[type].basePrice + EH.sizeAdd(type, S.size) : 0;
   el.innerHTML = `
-    <p class="p3d-status" role="status"><span class="p3d-status-dot ${S.previewId && !S.dirty ? 'ok' : ''}"></span>${status}</p>
+    <p class="p3d-status" role="status"><span class="p3d-status-dot ok"></span>${S.dirty ? 'Design ready to export' : 'Ready to export'}</p>
     ${sellable ? `
       <div class="studio-buy-total"><span>Subtotal</span><strong>${EH.money(unit * S.qty)}</strong></div>
-      <label class="studio-qty"><span>Quantity</span><span><button type="button" data-qty="-1" aria-label="Decrease quantity">−</button><input type="number" min="1" max="20" value="${S.qty}" id="qty" aria-label="Quantity"><button type="button" data-qty="1" aria-label="Increase quantity">+</button></span></label>
-      <div class="p3d-action-stack">
-        <button class="btn p3d-save-preview-button" type="button" data-act="save" aria-label="Save this design to Your 3D Previews" title="Save this design to Your 3D Previews">${icon('heart')} Save Preview</button>
-        <button class="btn btn-gold studio-add-button" type="button" data-act="bag">${icon('bag')} Buy now</button>
-      </div>` : `
-      <button class="btn p3d-save-preview-button p3d-save-preview-block" type="button" data-act="save" aria-label="Save this design to Your 3D Previews" title="Save this design to Your 3D Previews">${icon('heart')} Save Preview</button>
-    `}`;
+      <label class="studio-qty"><span>Quantity</span><span><button type="button" data-qty="-1" aria-label="Decrease quantity">−</button><input type="number" min="1" max="20" value="${S.qty}" id="qty" aria-label="Quantity"><button type="button" data-qty="1" aria-label="Increase quantity">+</button></span></label>` : ''}
+    <div class="p3d-action-stack">
+      <button class="btn btn-outline btn-block" type="button" data-act="glb">${icon('download')} Export high-quality GLB</button>
+      ${sellable ? `<button class="btn btn-gold studio-add-button" type="button" data-act="bag">${icon('bag')} Buy now</button>` : ''}
+    </div>`;
   el.onclick = (e) => {
     const q = e.target.closest('[data-qty]');
     if (q) { S.qty = Math.min(20, Math.max(1, S.qty + Number(q.dataset.qty))); renderActions(); return; }
     const act = e.target.closest('[data-act]')?.dataset.act;
-    if (act === 'save') save();
+    if (act === 'glb') downloadGlb();
     if (act === 'bag') addToBag();
   };
   el.onchange = (e) => { if (e.target.id === 'qty') { S.qty = Math.min(20, Math.max(1, Math.round(Number(e.target.value) || 1))); renderActions(); } };
 }
-
-async function save() {
-  if (S.previewId) return doSave();
-  const folders = await store.listFolders();
-  const guest = store.isGuest();
-  const m = EH.modal.open(`
-    <h3>Save 3D preview</h3>
-    <p class="muted p3d-modal-lead">It goes to <b>Your account › Your 3D previews</b>, where you can sort previews into folders.</p>
-    <form class="p3d-form" data-save>
-      <div class="field"><label for="saveName">Name</label><input class="input" id="saveName" maxlength="80" required value="${esc(S.name === DEFAULT_NAME ? `${productLabel()} preview` : S.name)}"></div>
-      <div class="field"><label for="saveFolder">Folder</label>
-        <select class="select" id="saveFolder">
-          <option value="">Not in a folder</option>
-          ${folders.map((f) => `<option value="${f.id}" ${f.id === S.folderId ? 'selected' : ''}>${esc(f.name)}</option>`).join('')}
-          <option value="__new">New folder…</option>
-        </select></div>
-      <div class="field" data-newfolder hidden><label for="saveNewFolder">New folder name</label><input class="input" id="saveNewFolder" maxlength="60" placeholder="e.g. Diwali drop"></div>
-      ${guest ? `<p class="form-note">You're not signed in, so this preview is saved on this device only. <a class="gold" href="${esc(EH.authLink('login.html'))}">Sign in</a> first to keep it with your account.</p>` : ''}
-      <div class="preview-actions"><button class="btn btn-ghost btn-sm" type="button" data-close-modal>Cancel</button><button class="btn btn-gold btn-sm" type="submit">Save preview</button></div>
-    </form>`);
-  const sel = $('#saveFolder', m);
-  sel.addEventListener('change', () => { $('[data-newfolder]', m).hidden = sel.value !== '__new'; if (sel.value === '__new') $('#saveNewFolder', m).focus(); });
-  $('[data-save]', m).addEventListener('submit', async (e) => {
-    e.preventDefault();
-    const name = $('#saveName', m).value.trim();
-    if (!name) return $('#saveName', m).focus();
-    let folderId = sel.value || null;
-    if (folderId === '__new') {
-      const fname = $('#saveNewFolder', m).value.trim();
-      if (!fname) return $('#saveNewFolder', m).focus();
-      folderId = (await store.createFolder(fname)).id;
-    }
-    S.name = name;
-    S.folderId = folderId;
-    EH.modal.close();
-    await doSave();
-  });
-}
-
-async function doSave() {
-  const btns = [...$$('[data-act="save"]'), ...$$('[data-layout-act="save"]')];
-  btns.forEach((b) => { b.disabled = true; });
-  try {
-    const thumbnail = await studio.thumbnail(480);
-    const rec = await store.savePreview({
-      id: S.previewId || undefined,
-      name: S.name,
-      folderId: S.folderId,
-      product: productLabel(),
-      kind: kind(),
-      orderType: S.orderType,
-      orderColor: S.orderColor,
-      thumbnail,
-      state: studio.getState(),
-      file: studio.fileBlob || null,
-      fileName: studio.model?.fileName || null,
-    });
-    S.previewId = rec.id;
-    S.dirty = false;
-    const firebaseApi = window.EHFirebase;
-    if (firebaseApi?.enabled) {
-      try {
-        await firebaseApi.ready;
-        const user = firebaseApi.currentUser;
-        if (user) {
-          const assets = await createCustomizationAssets(rec.id);
-          S.cloudPaths = await firebaseApi.saveCustomization(user.uid, rec.id, assets.metadata, assets.files);
-          S.cloudOwnerUid = user.uid;
-          S.cloudSynced = true;
-          await store.savePreview({ id: rec.id, cloudPaths: S.cloudPaths, cloudSynced: true, cloudOwnerUid: user.uid });
-        } else {
-          S.cloudSynced = false;
-        }
-      } catch (error) {
-        S.cloudSynced = false;
-        console.error('Saved preview could not sync to Firebase.', error);
-        EH.toast('Preview saved on this device, but Firebase sync failed: ' + (error.message || 'please try again.'), { type: 'error', duration: 6000 });
-      }
-    }
-    history.replaceState(null, '', `${location.pathname}?id=${encodeURIComponent(rec.id)}`);
-    renderAll();
-    EH.toast(S.cloudSynced ? `Saved “${rec.name}” to your account` : `Saved “${rec.name}” on this device`, { action: { label: 'View', href: '3d-preview/account.html#previews' } });
-  } catch (err) {
-    console.error(err);
-    EH.toast(/quota/i.test(err?.name || err?.message) ? 'Browser storage is full. Delete a few saved previews and try again.' : 'This preview could not be saved.', { type: 'error' });
-  } finally {
-    btns.forEach((b) => { b.disabled = false; });
-  }
-}
-
-async function createCustomizationAssets(id, order = null) {
-  const details = customizationDetails(id, order);
-  const [mockup, preview] = await Promise.all([
-    studio.exportGlb({ name: details.name, ...glbMetadata(details) }),
-    studio.capture({ width: 1024, height: 1024, type: 'image/png' }),
-  ]);
-  if (!preview) throw new Error('A preview image could not be created.');
-  const files = {
-    mockup,
-    details: new Blob([JSON.stringify(details, null, 2)], { type: 'application/json' }),
-    preview,
-  };
-  if (details.sourceModelName && studio.fileBlob) files.sourceModel = studio.fileBlob;
-  return {
-    files,
-    metadata: {
-      name: details.name,
-      product: details.product,
-      kind: details.kind,
-      productType: details.productType || '',
-      orderType: details.orderType || '',
-      orderColor: details.orderColor || '',
-      color: details.color,
-      colorHex: details.colorHex,
-      finish: details.finish,
-      size: details.size,
-      model: details.model,
-      quantity: details.quantity,
-      unitPrice: details.unitPrice,
-      summary: details.summary,
-      previewId: details.previewId || '',
-      orderId: details.orderId || '',
-      sourceModelName: details.sourceModelName || '',
-    },
-  };
-}
-
 async function addToBag() {
   const type = shopType();
   if (!type || !EH.types[type]) {
@@ -1251,7 +932,7 @@ async function addToBag() {
     ]);
     if (filesSaved.some((saved) => !saved)) throw new Error('The 3D mockup could not be saved in this browser. Check available storage and try again.');
     const ok = EH.cart.add({
-      custom: true, custom3d: true, customId, previewId: S.previewId || '', name, type, color: catalogueColorId(), size: T.sizes ? S.size : undefined, model: T.models ? S.model : undefined,
+      custom: true, custom3d: true, customId, name, type, color: catalogueColorId(), size: T.sizes ? S.size : undefined, model: T.models ? S.model : undefined,
       sourceModelKey: sourceModelKey || undefined,
       sourceModelName: sourceModelKey ? (studio.model?.fileName || '') : '',
       qty: S.qty, price: T.basePrice + EH.sizeAdd(type, S.size), image, summary: details.summary,
@@ -1319,9 +1000,7 @@ function openStartChooser({ focusUpload = false } = {}) {
 
 function resetPreview() {
   for (const l of [...studio.layers]) studio.removeLayer(l.id);
-  S.previewId = null;
   S.name = DEFAULT_NAME;
-  S.folderId = null;
   S.size = null;
   S.orderType = null;
   S.orderColor = null;
@@ -1331,7 +1010,7 @@ function resetPreview() {
 
 async function confirmDiscard() {
   if (!S.dirty) return true;
-  return EH.confirm('Discard changes?', 'Your latest changes to this preview are not saved yet.', 'Discard');
+  return EH.confirm('Discard changes?', 'Your latest design changes will be lost if you leave.', 'Discard');
 }
 
 async function loadModelFile(file) {
@@ -1342,7 +1021,7 @@ async function loadModelFile(file) {
   }
   try {
     await withLoading(`Reading ${file.name}`, () => studio.loadFile(file, file.name));
-    if (!S.previewId && S.name === DEFAULT_NAME) S.name = file.name.replace(/\.[^.]+$/, '');
+    if (S.name === DEFAULT_NAME) S.name = file.name.replace(/\.[^.]+$/, '');
     markDirty();
     renderAll();
     setTab('product');
@@ -1395,7 +1074,6 @@ function bindStage() {
     if (/^image\//.test(f.type)) addArtworkFile(f);
     else loadModelFile(f);
   });
-  $('#recordCancel').addEventListener('click', () => recordAbort?.abort());
 }
 
 function onKeyDown(e) {
@@ -1406,7 +1084,6 @@ function onKeyDown(e) {
     e.preventDefault();
     studio.removeLayer(studio.selectedId);
   }
-  if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 's') { e.preventDefault(); save(); }
 }
 
 // Last, so every helper above is defined before init runs.

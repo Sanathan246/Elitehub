@@ -118,7 +118,7 @@ export async function renderTextCanvas({ text, font = 'montserrat', color = '#17
   return { canvas: c, aspect: c.width / c.height };
 }
 
-/** Downscale an uploaded image so saved previews stay light. Returns a data URL. */
+/** Downscale an uploaded image to keep the live studio responsive. Returns a data URL. */
 export async function normaliseImage(file, max = 2048) {
   const url = URL.createObjectURL(file);
   try {

@@ -1,24 +1,22 @@
 # EliteHub 3D preview
 
 A 3D product catalogue (modelled on VirtualThreads' products page), a 3D
-customization window, and an Amazon-style "Your Account" page with folders for
-saved 3D previews. Everything lives in this folder; no existing EliteHub
-file is changed.
+customization window, and an account page for orders and delivery details.
+Customers can export a GLB or attach their design to an order; the studio does
+not offer a saved-preview library.
 
 ```
 3d-preview/
   products.html        3D product catalogue: categories, search, sort, hover to see the back
   customizer.html      3D studio (the customization window)
-  account.html         "Your Account" tiles + Your 3D previews + your existing orders/details/sign-in
+  account.html         "Your Account" tiles + existing orders/details/sign-in
   css/preview3d.css    styles, built on css/style.css (gold tokens, .btn, .studio-*, .swatch…)
   assets/products/     catalogue renders (<id>.jpg and <id>-alt.jpg for the hover view)
   js/catalogue.js      catalogue page
   js/customizer.js     3D studio UI
-  js/previews.js       Your 3D previews: folders, search, sort, move, rename, delete
-  js/store.js          where previews and folders are saved (IndexedDB, per account)
   js/studio/           the 3D engine (three.js 0.160.0 from jsDelivr)
     catalog.js         the product list: categories, prices link, default colours (no three.js)
-    studio.js          scene, lights, camera, print layers, PNG + video export
+    studio.js          scene, lights, camera, print layers, GLB export
     models.js          product builders (mug, phone case, tote, cushion, frame), file loaders
     textures.js        kraft board, backdrops, text rendering
     garments/*.js      generated garment meshes, loaded only when opened (~350–500 KB each)
@@ -42,8 +40,7 @@ browsers block ES modules there. Netlify and Firebase Hosting serve it as-is.
 
 Both pages start with `<base href="../">`, so the shared header, footer, cart,
 Firebase sign-in, `assets/` and `css/style.css` all resolve from the site root.
-Because of that, links inside these pages are written from the root too
-(`3d-preview/account.html#previews`, not `#previews`).
+Because of that, links inside these pages are written from the root too.
 
 ## The 3D products
 
@@ -85,40 +82,29 @@ product's default colour, re-render its two images.
   previews but can't be ordered.
 - **Scene**: Studio dark (matches the reference video), Midnight, Studio light,
   Stone, transparent or any colour; three lighting setups; turntable.
-- **Export**: a self-contained 3D mockup (.glb) with original texture resolution,
-  PNG up to 4K (square, landscape, portrait, transparent), design details (.json), and 360° video
-  (.mp4 in Chrome/Safari, .webm elsewhere).
-- **Save**: to Your account › Your 3D previews, optionally into a folder.
+- **Export**: a self-contained, high-quality 3D mockup (.glb) with model, finish,
+  and artwork embedded.
 - **Add to bag**: catalogue products use the current shop price. Uploaded models can
   be ordered as an existing store product. Before adding the cart item, the studio
   saves a customized GLB, the original uploaded file, a preview and design details
-  in browser storage. At checkout, Firebase Storage keeps those original file bytes;
-  the Firestore order points to a customization record containing their paths, and
-  the admin order page can download the mockup, source model and order details. The
-  full-size file upload requires Firebase Storage rules to be deployed.
+  in browser storage. At checkout, the GLB, uploaded source model, preview, and
+  design details are saved with the order in Firebase. Firestore rules must be
+  deployed for order records and the current file-storage fallback; Firebase
+  Storage rules are needed only when a Storage bucket is configured.
 
-Keyboard: Delete removes the selected print (Design tab), Ctrl/Cmd+S saves,
-arrow keys move between tabs.
+Keyboard: Delete removes the selected print (Design tab); arrow keys move between tabs.
 
 URL options: `customizer.html?template=<product id>` (tee, longsleeve, tank, crewneck,
-hoodie, mug, phonecase, tote, cushion, frame), `?start=upload`, `?id=<saved preview>`.
+hoodie, mug, phonecase, tote, cushion, frame), `?start=upload`.
 Catalogue: `products.html?category=sweats&q=hood&orderable=1`.
 
-## Where previews are stored
+## Custom orders
 
-Saved previews stay in the browser's IndexedDB (`elitehub-3d-previews`).
-For a signed-in user, saving a preview also syncs its GLB mockup, PNG preview,
-JSON design details and metadata to that user's Firebase Storage and Firestore.
-At checkout the purchased 3D design and order reference are saved to Firebase;
-the GLB and design details can be downloaded again from order details.
-
-Each preview is tagged with the signed-in Firebase uid (or "guest"), and lists
-only show the current person's previews. If someone saved previews before
-signing in, the account page offers to add them to their account.
-
-The account's saved-preview list and folders remain device-local. Firebase
-stores individual synced/purchased customization files under
-`users/{uid}/customizations/{id}`; it does not sync the preview list or folders.
+Adding a customized 3D product to the bag stores its high-quality GLB, original
+uploaded model when applicable, preview image, and order details for checkout.
+The order's customization files are uploaded under `users/{uid}/customizations/{id}`
+and can be downloaded from the order details. The studio does not store a separate
+customer preview library.
 
 ## Main site integration
 
@@ -128,9 +114,9 @@ redirect; it maps former product, color, artwork and text parameters into the
 3D customizer. Bag items created by the 3D studio link back to the 3D customizer.
 ## Browser support
 
-Any browser with WebGL 2 (Chrome, Edge, Firefox, Safari 15+). Video recording
-needs MediaRecorder (Chrome, Edge, Firefox, Safari 17+); the button explains
-when it isn't available. Motion respects "reduce motion".
+Any browser with WebGL 2 (Chrome, Edge, Firefox, Safari 15+). Motion respects
+"reduce motion". High-quality GLB export and order file uploads require a modern
+browser with enough available memory and storage for the selected model.
 
 ## Changing the garments
 

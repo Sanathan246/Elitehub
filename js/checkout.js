@@ -195,7 +195,7 @@
           throw new Error(`The design details for ${item.name || 'your custom product'} could not be read. Reopen the 3D studio and add it to your bag again.`);
         }
         if (item.sourceModelName && !(sourceModel instanceof Blob)) {
-          throw new Error('The original 3D file for ' + (item.name || 'your custom product') + ' is missing from this browser. Reopen the saved preview and add it to your bag again.');
+          throw new Error('The original 3D file for ' + (item.name || 'your custom product') + ' is missing from this browser. Return to the 3D studio, upload the model again, and add it to your bag.');
         }
         const purchasedDetails = new Blob([JSON.stringify({
           ...details,
@@ -224,7 +224,6 @@
           quantity: item.qty,
           unitPrice: item.price,
           summary: item.summary || '',
-          previewId: item.previewId || '',
           orderId: order.id,
           sourceModelName: item.sourceModelName || '',
         };

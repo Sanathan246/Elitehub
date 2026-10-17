@@ -58,7 +58,6 @@ export class Studio extends EventTarget {
     this.settings = { backdrop: 'studio', lighting: 'soft', floor: false, turntable: false, speed: 1 };
     this.scale = 1;
     this.bounds = new THREE.Box3(new THREE.Vector3(-0.5, -0.5, -0.5), new THREE.Vector3(0.5, 0.5, 0.5));
-    this._recording = null;
     this._tween = null;
 
     const r = (this.renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true }));
@@ -284,7 +283,6 @@ export class Studio extends EventTarget {
   resize() {
     const w = Math.max(1, this.container.clientWidth);
     const h = Math.max(1, this.container.clientHeight);
-    if (this._recording) return;
     this.renderer.setSize(w, h, false);
     this.renderer.domElement.style.width = '100%';
     this.renderer.domElement.style.height = '100%';
@@ -702,7 +700,7 @@ export class Studio extends EventTarget {
     el.addEventListener('pointerdown', (e) => {
       if (e.button !== 0) return;
       down = { x: e.clientX, y: e.clientY, t: performance.now() };
-      if (!this.editing || this._recording) return;
+      if (!this.editing) return;
       const selected = this.layers.find((item) => item.id === this.selectedId);
       const handle = selected && this._resizeHandleAt(selected, e);
       if (selected && handle) {
@@ -848,13 +846,7 @@ export class Studio extends EventTarget {
       this.controls.target.lerpVectors(tw.fromT, tw.toT, k);
       if (tw.t >= 1) this._tween = null;
     }
-    if (this._recording) {
-      const rec = this._recording;
-      const t = Math.min(1, (performance.now() - rec.start) / (rec.seconds * 1000));
-      this.spin.rotation.y = rec.angle0 + t * Math.PI * 2;
-      rec.onProgress?.(t);
-      if (t >= 1 && !rec.stopping) { rec.stopping = true; rec.recorder.stop(); }
-    } else if (this.settings.turntable && !reducedMotion()) {
+    if (this.settings.turntable && !reducedMotion()) {
       this.spin.rotation.y += dt * 0.55 * this.settings.speed;
     }
     this.controls.update();
@@ -933,45 +925,8 @@ export class Studio extends EventTarget {
     return new Promise((res) => { const fr = new FileReader(); fr.onload = () => res(fr.result); fr.readAsDataURL(blob); });
   }
 
-  static recordingSupport() {
-    if (!('MediaRecorder' in window) || !HTMLCanvasElement.prototype.captureStream) return null;
-    const types = ['video/mp4;codecs=avc1.42E01E', 'video/mp4', 'video/webm;codecs=vp9', 'video/webm;codecs=vp8', 'video/webm'];
-    const mime = types.find((t) => MediaRecorder.isTypeSupported(t));
-    return mime ? { mime, ext: mime.startsWith('video/mp4') ? 'mp4' : 'webm' } : null;
-  }
-
-  /** Records one full turn of the model. Resolves to { blob, ext }. */
-  recordTurntable({ seconds = 6, width = 1080, height = 1080, onProgress, signal } = {}) {
-    const support = Studio.recordingSupport();
-    if (!support) return Promise.reject(new Error('Video recording is not supported in this browser. Try Chrome, Edge or Safari 17+.'));
-    return new Promise((resolve, reject) => {
-      this._withSize(width, height, {}, (restore) => {
-        const stream = this.renderer.domElement.captureStream(30);
-        const recorder = new MediaRecorder(stream, { mimeType: support.mime, videoBitsPerSecond: 10_000_000 });
-        const chunks = [];
-        recorder.ondataavailable = (e) => e.data.size && chunks.push(e.data);
-        recorder.onstop = () => {
-          stream.getTracks().forEach((t) => t.stop());
-          this.spin.rotation.y = this._recording.angle0;
-          const cancelled = this._recording.cancelled;
-          this._recording = null;
-          restore();
-          this.resize();
-          if (cancelled) reject(new DOMException('Recording cancelled', 'AbortError'));
-          else resolve({ blob: new Blob(chunks, { type: support.mime.split(';')[0] }), ext: support.ext });
-        };
-        this._paused = false; // recording renders every frame; the overlay covers the stage
-        this._recording = { recorder, seconds, start: performance.now() + 120, angle0: this.spin.rotation.y, onProgress, stopping: false };
-        signal?.addEventListener('abort', () => {
-          if (this._recording && !this._recording.stopping) { this._recording.cancelled = true; this._recording.stopping = true; recorder.stop(); }
-        });
-        recorder.start(250);
-      });
-    });
-  }
-
   /* ------------------------------------------------------------ */
-  /* Save / restore                                                */
+  /* Design details used with orders                               */
   /* ------------------------------------------------------------ */
   getState() {
     return {
@@ -987,21 +942,6 @@ export class Studio extends EventTarget {
       })),
       camera: { position: arr(this.camera.position), target: arr(this.controls.target) },
     };
-  }
-
-  async setState(state, fileBlob = null) {
-    for (const l of [...this.layers]) this.removeLayer(l.id);
-    const m = state.model;
-    if (m?.kind === 'upload' && fileBlob) await this.loadFile(fileBlob, m.fileName, state.appearance);
-    else await this.loadTemplate(m?.template || 'tee', m?.params || {}, state.appearance);
-    this.setScene(state.scene || {});
-    for (const l of state.layers || []) await this.addLayer({ ...l, silent: true });
-    this._emitLayers();
-    if (state.camera) {
-      this.camera.position.copy(v3(state.camera.position));
-      this.controls.target.copy(v3(state.camera.target));
-      this.controls.update();
-    }
   }
 
   dispose() {
