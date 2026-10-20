@@ -18,14 +18,20 @@ service cloud.firestore {
       && exists(/databases/$(database)/documents/users/$(userId)/orders/$(resource.data.orderId));
   }
 
-  function customizationHasOrderById(userId, customizationId) {
-    let customizationPath = /databases/$(database)/documents/users/$(userId)/customizations/$(customizationId);
+  function customizationReferencesExistingOrder(userId, customizationPath) {
     let customization = get(customizationPath);
-    return customization != null
-      && 'orderId' in customization.data
+    return 'orderId' in customization.data
       && customization.data.orderId is string
       && customization.data.orderId.size() > 0
       && exists(/databases/$(database)/documents/users/$(userId)/orders/$(customization.data.orderId));
+  }
+
+  function customizationHasOrderById(userId, customizationId) {
+    let customizationPath = /databases/$(database)/documents/users/$(userId)/customizations/$(customizationId);
+    // Check existence first so new, order-specific customization IDs can upload
+    // their GLB chunks without attempting to read a missing customization doc.
+    return exists(customizationPath)
+      && customizationReferencesExistingOrder(userId, customizationPath);
   }
 
   function adminOrderUpdate() {
@@ -161,9 +167,12 @@ service cloud.firestore {
 
           match /chunks/{chunkId} {
             allow read: if isOwner(userId) || isAdmin();
-            allow create, update: if isOwner(userId)
+            // Uploads use a fresh random uploadId per attempt. Allow create-only
+            // writes so retries work while existing order chunks stay immutable.
+            allow create: if isOwner(userId)
               && !customizationHasOrderById(userId, customizationId)
               && assetName == 'mockup'
+              && request.resource.data.keys().hasOnly(['uploadId', 'index', 'chunk'])
               && request.resource.data.uploadId is string
               && request.resource.data.uploadId.size() > 0
               && request.resource.data.uploadId.size() <= 100
@@ -203,3 +212,4 @@ service cloud.firestore {
     }
   }
 }
+
