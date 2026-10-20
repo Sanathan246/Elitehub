@@ -21,7 +21,6 @@
     const st = EH.defaultOptions(p.type, T.colors.includes(qColor) ? qColor : p.color);
     let qty = 1;
     const off = p.mrp ? Math.round((1 - p.price / p.mrp) * 100) : 0;
-    const stars = Array.from({ length: 5 }, (_, i) => EH.icon('star').replace('fill="none"', i < Math.round(p.rating) ? 'fill="currentColor"' : 'fill="none"')).join('');
 
     document.title = `${p.name} — ${EH.productSubtitle(p)} | EliteHub`;
     const meta = document.querySelector('meta[name=description]');
@@ -37,7 +36,7 @@
         <span class="eyebrow" style="font-size:11px;color:var(--gold)">${EH.esc(cat.name)}</span>
         <h1>${EH.esc(p.name)}</h1>
         <p class="pdp-sub">${EH.esc(EH.productSubtitle(p))}</p>
-        <div class="rating"><span class="stars-row" aria-label="Rated ${p.rating} out of 5">${stars}</span><span>${p.rating.toFixed(1)} · ${p.reviews} reviews</span></div>
+        <div class="pdp-promise">${EH.icon('package')} <span>Made to order</span></div>
         <div class="pdp-price"><span class="now" id="price">${EH.money(p.price)}</span>${p.mrp ? `<s>${EH.money(p.mrp)}</s><span class="off">${off}% OFF</span>` : ''}</div>
         <p class="muted" style="margin-bottom:26px;font-size:14.5px">${EH.esc(p.description)}</p>
         <div id="opts">${EH.optionsHTML(p.type, st)}</div>
@@ -107,7 +106,7 @@
     document.getElementById('buyBtn').addEventListener('click', () => { if (add()) location.href = 'checkout.html'; });
 
     /* related products: same category first */
-    const related = EH.products.filter((x) => x.id !== p.id).sort((a, b) => (EH.productCategory(b) === cat.id) - (EH.productCategory(a) === cat.id) || b.reviews - a.reviews).slice(0, 6);
+    const related = EH.products.filter((x) => x.id !== p.id).sort((a, b) => (EH.productCategory(b) === cat.id) - (EH.productCategory(a) === cat.id) || EH.products.indexOf(a) - EH.products.indexOf(b)).slice(0, 6);
     document.getElementById('related').innerHTML = related.map((x, i) => EH.productCard(x, i)).join('');
     EH.reveal();
   });

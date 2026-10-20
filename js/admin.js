@@ -106,7 +106,7 @@
             ${EH.orderItemsHTML(items, true)}
             <div style="margin-top:14px;max-width:420px">${EH.totalsHTML(order.totals || {})}</div>
             <p class="muted" style="margin:14px 0 0">Payment: ${escape(EH.paymentLabel(order.payment) || 'Not specified')}${order.paymentId ? ` · Reference: ${escape(order.paymentId)}` : ''}</p>
-            ${order.payment === 'online' && order.paymentId ? '<p class="form-note" style="margin:6px 0 0">Confirm this payment reference in your Razorpay dashboard before shipping.</p>' : ''}
+            ${order.payment === 'online' && order.paymentId ? '<p class="form-note" style="margin:6px 0 0">Verify this customer-submitted reference in Razorpay before marking the order Paid or starting fulfillment.</p>' : ''}
           </div>
           <form class="admin-order-form" data-order-index="${index}" style="padding:0 22px 20px">
             <div class="form-grid">

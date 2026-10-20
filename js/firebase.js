@@ -21,7 +21,7 @@
     loadProfile() { return Promise.resolve(null); },
     clearProfile() { return Promise.resolve(); },
     saveOrder() { return Promise.reject(unavailableError()); },
-    confirmPayment() { return Promise.reject(unavailableError()); },
+    recordPaymentReference() { return Promise.reject(unavailableError()); },
     listOrders() { return Promise.resolve([]); },
     subscribeOrders() { return () => {}; },
     cancelOrder() { return Promise.reject(unavailableError()); },
@@ -298,10 +298,9 @@
         });
         return batch.commit();
       },
-      confirmPayment(uid, orderId, paymentId) {
+      recordPaymentReference(uid, orderId, paymentId) {
         if (!uid || !orderId || !paymentId) return Promise.reject(new Error('A customer, order ID, and payment reference are required.'));
         return firestoreModule.updateDoc(firestoreModule.doc(db, 'users', uid, 'orders', orderId), {
-          status: 'Paid',
           paymentId: String(paymentId),
           updatedAt: firestoreModule.serverTimestamp()
         });

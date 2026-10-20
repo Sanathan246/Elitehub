@@ -56,11 +56,10 @@
       const has = (p, t) => ((p.tags || []).includes(t) ? 1 : 0);
       const sorters = {
         featured: (a, b) => order.indexOf(a.id) - order.indexOf(b.id),
-        trending: (a, b) => has(b, 'trending') - has(a, 'trending') || b.reviews - a.reviews,
+        trending: (a, b) => has(b, 'trending') - has(a, 'trending') || order.indexOf(a.id) - order.indexOf(b.id),
         new: (a, b) => has(b, 'new') - has(a, 'new') || order.indexOf(b.id) - order.indexOf(a.id),
         'price-asc': (a, b) => a.price - b.price,
-        'price-desc': (a, b) => b.price - a.price,
-        rating: (a, b) => b.rating - a.rating || b.reviews - a.reviews
+        'price-desc': (a, b) => b.price - a.price
       };
       list.sort(sorters[st.sort] || sorters.featured);
       document.getElementById('resultCount').textContent = `${list.length} product${list.length === 1 ? '' : 's'}${st.q ? ` matching “${st.q}”` : ''}`;

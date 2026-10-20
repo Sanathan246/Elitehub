@@ -793,7 +793,7 @@
     const pad = (n) => String(n).padStart(2, '0');
     return `EH${String(d.getFullYear()).slice(2)}${pad(d.getMonth() + 1)}${pad(d.getDate())}-${Math.random().toString(36).slice(2, 6).toUpperCase()}`;
   };
-  EH.paymentLabel = (m) => ({ online: 'Paid online (Razorpay)', cod: 'Cash on Delivery', whatsapp: 'Confirm on WhatsApp' }[m] || m);
+  EH.paymentLabel = (m) => ({ online: 'Online payment (Razorpay)', cod: 'Cash on Delivery', whatsapp: 'Confirm on WhatsApp' }[m] || m);
   EH.orderText = (o) => {
     const c = o.customer;
     const lines = [

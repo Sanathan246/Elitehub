@@ -220,6 +220,8 @@ p { margin: 0; }
 .p-foot { display: flex; align-items: center; justify-content: space-between; margin-top: 10px; }
 .p-price { font-size: 14px; font-weight: 600; }
 .p-price s { color: var(--muted-2); font-weight: 400; font-size: 12px; margin-left: 6px; }
+.pdp-promise { display: inline-flex; align-items: center; gap: 7px; margin: 4px 0 16px; color: var(--gold); font-size: 12px; font-weight: 600; letter-spacing: .04em; }
+.pdp-promise .ico { width: 16px; height: 16px; }
 .p-add { width: 30px; height: 30px; border-radius: 50%; border: 1px solid var(--gold-line); color: var(--gold); display: grid; place-items: center; transition: background .25s, color .25s, transform .25s; flex: none; }
 .p-add .ico { width: 15px; height: 15px; }
 .p-add:hover { background: var(--gold-grad); color: #1d140a; transform: rotate(90deg); border-color: transparent; }

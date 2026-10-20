@@ -141,7 +141,9 @@
       const current = Object.prototype.hasOwnProperty.call(progress, status) ? progress[status] : 0;
       return `<ol class="tracking-steps account-order-progress">${stages.map(([title, description], index) => {
         const state = index < current ? 'completed' : index === current ? 'current' : '';
-        const text = index === current && status === 'Payment pending' ? 'Complete payment to confirm your order.' : description;
+        const text = index === current && status === 'Payment pending'
+          ? (order.paymentId ? 'Payment reference received; the store is verifying it.' : 'Complete payment to confirm your order.')
+          : description;
         return `<li class="tracking-step ${state}"><span class="tracking-marker" aria-hidden="true"></span><div><strong>${title}</strong><p>${text}</p></div></li>`;
       }).join('')}</ol>`;
     }

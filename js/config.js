@@ -13,8 +13,8 @@ window.EH_CONFIG = {
 
   /* --- Contact details (shown on the Contact page & footer) --- */
   email: "devildosti246@gmail.com",
-  phone: "+91 00000 00000",              // TODO: your phone number (display format)
-  address: "India",                      // TODO: city / studio address
+  phone: "",                             // Add a real phone number to show a call option.
+  address: "",                           // Add a real city / studio address to show it.
   hours: "Mon – Sat, 10:00 AM – 7:00 PM",
 
   /* --- WhatsApp orders ---

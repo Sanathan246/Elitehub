@@ -46,7 +46,8 @@ service cloud.firestore {
   }
 
   /* New orders start unpaid: a customer can't create an order already marked
-     "Paid" or "Shipped". Payment is confirmed afterwards by customerConfirmPayment. */
+     "Paid" or "Shipped". A payment reference is customer-submitted and must be
+     verified by the store before an administrator changes the order to Paid. */
   function validNewOrder(userId, orderId) {
     return isOwner(userId)
       && request.resource.data.id == orderId
@@ -77,14 +78,15 @@ service cloud.firestore {
       && (!('sourceModel' in files) || validOrderAssetPath(userId, customizationId, 'sourceModel', files.sourceModel));
   }
 
-  function customerConfirmPayment(userId) {
+  function customerSubmitPaymentReference(userId) {
     return isOwner(userId)
       && resource.data.status == 'Payment pending'
-      && request.resource.data.status == 'Paid'
+      && request.resource.data.status == 'Payment pending'
       && request.resource.data.paymentId is string
       && request.resource.data.paymentId.size() > 0
+      && request.resource.data.paymentId.size() <= 120
       && request.resource.data.diff(resource.data).affectedKeys()
-        .hasOnly(['status', 'paymentId', 'updatedAt']);
+        .hasOnly(['paymentId', 'updatedAt']);
   }
 
   match /databases/{database}/documents {
@@ -140,7 +142,7 @@ service cloud.firestore {
       allow create: if validNewOrder(userId, orderId);
       // No delete: orders are business records. Customers cancel instead.
       allow update: if customerCancelOrder(userId)
-        || customerConfirmPayment(userId)
+        || customerSubmitPaymentReference(userId)
         || adminOrderUpdate();
 
       match /customizations/{customizationId} {

@@ -386,15 +386,17 @@
             ? 'Your order is already saved. Complete payment in the secure window.'
             : 'Your order and design files are saved. Complete payment in the secure window.');
           order.paymentId = await payOnline(order);
-          order.status = 'Paid';
+          let referenceSaved = true;
           try {
-            await firebaseApi.confirmPayment(orderUser.uid, order.id, order.paymentId);
+            await firebaseApi.recordPaymentReference(orderUser.uid, order.id, order.paymentId);
           } catch (error) {
-            console.warn('Paid order status could not be synced to Firebase.', error);
-            EH.toast('Payment succeeded, but the order update could not sync. Please contact us with your order number.', { type: 'error', duration: 6000 });
+            referenceSaved = false;
+            order.paymentReferenceSyncFailed = true;
+            console.warn('Payment reference could not be synced to Firebase.', error);
+            EH.toast('Payment succeeded, but its reference could not be saved. Contact the store with your order number and payment reference.', { type: 'error', duration: 7000 });
           }
           pendingOnline = null;
-          setProgress(100, 'Payment complete. Your order is placed.');
+          setProgress(100, referenceSaved ? 'Payment submitted for verification.' : 'Payment succeeded; contact the store with your reference.');
           finalize(order);
           return;
         }
@@ -505,7 +507,7 @@
       document.getElementById('checkoutRoot').innerHTML = `<div class="success-wrap">
         <div class="success-ico">${EH.icon('check')}</div>
         <h1>Thank <span class="gold-text">You!</span></h1>
-        <p class="muted">Your order has been placed, ${EH.esc(c.name.split(' ')[0])}! ${order.status === 'Paid' ? 'Payment received — we’ll' : 'We’ll'} start working on it right away.</p>
+        <p class="muted">Your order has been placed, ${EH.esc(c.name.split(' ')[0])}! ${order.payment === 'online' && order.status === 'Payment pending' ? (order.paymentReferenceSyncFailed ? 'Your payment reference could not be saved. Contact us with your order number and reference so we can verify it.' : 'Your payment reference is awaiting verification. We’ll begin preparing your order once it is confirmed.') : order.status === 'Paid' ? 'Payment confirmed — we’ll begin preparing your order.' : 'We’ll be in touch to confirm your order and begin preparing it.'}</p>
         <div class="order-id">Order #${order.id}</div>
         <p class="form-note ok" id="emailNote" style="min-height:0"></p>
         ${waBtn || mailBtn ? `<p class="muted" style="font-size:13.5px;margin-top:10px">${C2.whatsappNumber ? 'Tap below to send your order to us on WhatsApp' + (hasCustom && !order.items.some((item) => item.custom3d) ? ' — then attach your design file(s).' : ' for the fastest confirmation.') : `Tap below to email your order details to us at <b class="gold">${EH.esc(C2.email)}</b> so we can confirm it.`}</p>` : ''}
