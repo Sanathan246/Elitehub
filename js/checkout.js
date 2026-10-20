@@ -183,23 +183,18 @@
         if (!/^[A-Za-z0-9_-]{1,120}$/.test(sourceCustomizationId)) {
           throw new Error(`The 3D design ID for ${item.name || 'your custom product'} is invalid. Reopen the 3D studio and add it to your bag again.`);
         }
-        const [mockup, detailsFile, preview, sourceModel] = await Promise.all([
-          EH.files.get(`mockup:${sourceCustomizationId}`),
-          EH.files.get(`details:${sourceCustomizationId}`),
-          EH.files.get(`previewBlob:${sourceCustomizationId}`),
-          item.sourceModelName ? EH.files.get(item.sourceModelKey || `sourceModel:${sourceCustomizationId}`) : Promise.resolve(null),
-        ]);
-        if (!(mockup instanceof Blob) || !(detailsFile instanceof Blob) || !(preview instanceof Blob)) {
-          throw new Error(`The 3D mockup files for ${item.name || 'your custom product'} are missing from this browser. Reopen the 3D studio and add the design to your bag again.`);
+        const mockup = await EH.files.get(`mockup:${sourceCustomizationId}`);
+        if (!(mockup instanceof Blob) || !mockup.size) {
+          throw new Error(`The generated GLB for ${item.name || 'your custom product'} is missing from this browser. Reopen the 3D studio and add the design to your bag again.`);
         }
-        let details;
-        try {
-          details = JSON.parse(await detailsFile.text());
-        } catch (error) {
-          throw new Error(`The design details for ${item.name || 'your custom product'} could not be read. Reopen the 3D studio and add it to your bag again.`);
-        }
-        if (item.sourceModelName && !(sourceModel instanceof Blob)) {
-          throw new Error('The original 3D file for ' + (item.name || 'your custom product') + ' is missing from this browser. Return to the 3D studio, upload the model again, and add it to your bag.');
+        // The full studio details file may contain artwork data and preview state.
+        // Read it locally only as a fallback for older cart items; never upload it.
+        let details = item.designDetails && typeof item.designDetails === 'object' ? item.designDetails : null;
+        if (!details) {
+          const detailsFile = await EH.files.get(`details:${sourceCustomizationId}`);
+          if (detailsFile instanceof Blob) {
+            try { details = JSON.parse(await detailsFile.text()); } catch (error) { details = null; }
+          }
         }
         // Keep each order's files immutable and separate from any earlier order
         // made from the same studio design.
@@ -207,38 +202,39 @@
         if (!orderSuffix) throw new Error('The order ID is invalid. Refresh checkout and try again.');
         const orderCustomizationId = `${sourceCustomizationId.slice(0, 120 - orderSuffix.length - 1)}_${orderSuffix}`;
         item.customId = orderCustomizationId;
-        const purchasedDetails = new Blob([JSON.stringify({
-          ...details,
-          id: orderCustomizationId,
-          order: {
-            id: order.id,
-            date: order.date,
-            quantity: item.qty,
-            unitPrice: item.price,
-            productType: item.type,
-            color: item.color,
-            size: item.size || '',
-            model: item.model || '',
-            summary: item.summary || '',
-          },
-        }, null, 2)], { type: 'application/json' });
+        const designDetails = {
+          product: String(details?.product || item.name || 'Custom 3D product').slice(0, 120),
+          kind: String(details?.kind || (item.sourceModelName ? 'upload' : 'catalogue')).slice(0, 40),
+          productType: String(details?.productType || item.type || '').slice(0, 40),
+          orderType: String(details?.orderType || '').slice(0, 40),
+          orderColor: String(details?.orderColor || '').slice(0, 40),
+          color: String(details?.color || (EH.colors[item.color] ? EH.colors[item.color].name : 'Custom')).slice(0, 40),
+          colorHex: String(details?.colorHex || '').slice(0, 16),
+          finish: String(details?.finish || '').slice(0, 40),
+          size: String(item.size || details?.size || '').slice(0, 40),
+          model: String(item.model || details?.model || '').slice(0, 80),
+          quantity: Math.max(1, Math.min(20, Number(item.qty) || 1)),
+          unitPrice: Math.max(0, Number(item.price) || 0),
+          summary: String(item.summary || details?.summary || '').slice(0, 500),
+        };
+        item.designDetails = designDetails;
         const metadata = {
           name: item.name,
           product: item.name,
-          kind: details.kind,
+          kind: designDetails.kind,
           productType: item.type,
-          color: EH.colors[item.color] ? EH.colors[item.color].name : 'Custom',
-          colorHex: details.colorHex || '',
-          finish: details.finish || '',
-          size: item.size || '',
-          model: item.model || '',
+          color: designDetails.color,
+          colorHex: designDetails.colorHex,
+          finish: designDetails.finish,
+          size: designDetails.size,
+          model: designDetails.model,
           quantity: item.qty,
           unitPrice: item.price,
-          summary: item.summary || '',
+          summary: designDetails.summary,
           orderId: order.id,
-          sourceModelName: item.sourceModelName || '',
+          designDetails,
         };
-        const assets = { mockup, details: purchasedDetails, preview, sourceModel };
+        const assets = { mockup };
         purchased.push({ item, metadata, assets, size: Object.values(assets).reduce((sum, asset) => sum + (asset instanceof Blob ? asset.size : 0), 0) });
       }
       const totalBytes = purchased.reduce((sum, entry) => sum + entry.size, 0);
@@ -254,12 +250,12 @@
                 const loaded = Math.min(Number(event.totalBytes) || Number(event.loadedBytes) || prior, Math.max(prior, Number(event.loadedBytes) || 0));
                 uploadedByAsset.set(event.assetName, loaded);
                 const itemBytes = Array.from(uploadedByAsset.values()).reduce((sum, bytes) => sum + bytes, 0);
-                onProgress(totalBytes ? Math.min(1, (completedBytes + itemBytes) / totalBytes) : 1, 'Saving your GLB and design files to Firestore…');
+                onProgress(totalBytes ? Math.min(1, (completedBytes + itemBytes) / totalBytes) : 1, 'Uploading the generated GLB to Firebase…');
               }
             });
             entry.item.customizationFiles = paths;
             completedBytes += entry.size;
-            onProgress(totalBytes ? completedBytes / totalBytes : 1, 'Your design files are saved.');
+            onProgress(totalBytes ? completedBytes / totalBytes : 1, 'Your GLB is saved.');
           }
         }
       };
@@ -362,7 +358,7 @@
           btn.textContent = hasCustom3d ? 'Saving design and order…' : 'Saving your order…';
           setProgress(7, hasCustom3d ? 'Preparing your design files…' : 'Saving your order…');
           setStatus(hasCustom3d
-            ? 'Preparing your custom 3D files and order details. Keep this page open.'
+            ? 'Preparing the GLB and order details. Your preview stays in this browser. Keep this page open.'
             : 'Saving your order. Please keep this page open.');
           failureStage = hasCustom3d ? 'design-files' : 'order';
           const filePlan = await preparePurchasedCustomizations(orderUser, order);
@@ -373,10 +369,10 @@
           }
           failureStage = 'order';
           setProgress(88, 'Saving your order and organizing its design files…');
-          setStatus('Saving your order and attaching its GLB, design details, and preview.');
+          setStatus('Saving your order details and attaching its generated GLB.');
           await firebaseApi.saveOrder(orderUser.uid, order);
           orderSaved = true;
-          setProgress(94, 'Order and design files saved.');
+          setProgress(94, 'Order details and GLB saved.');
           if (payment === 'online') pendingOnline = { signature, order };
         }
         if (payment === 'online') {
@@ -384,7 +380,7 @@
           setProgress(orderSaved ? 96 : 94, 'Order saved. Opening secure payment…');
           setStatus(reuse
             ? 'Your order is already saved. Complete payment in the secure window.'
-            : 'Your order and design files are saved. Complete payment in the secure window.');
+            : 'Your order details and GLB are saved. Complete payment in the secure window.');
           order.paymentId = await payOnline(order);
           let referenceSaved = true;
           try {
@@ -414,7 +410,7 @@
       } catch (error) {
         if (whatsappWindow) whatsappWindow.close();
         if (error.message !== 'Payment was cancelled — your bag is still saved.') console.error('Order could not be placed.', error);
-        const deniedFile = ({ mockup: 'generated GLB', details: 'design details', preview: 'preview image', sourceModel: 'uploaded original model' })[error?.assetName] || '3D design files';
+        const deniedFile = ({ mockup: 'generated GLB' })[error?.assetName] || 'generated GLB';
         const message = ['resource-exhausted', 'firestore/resource-exhausted'].includes(String(error?.code || ''))
           ? 'Firestore could not save the order files because its storage or write quota was reached. The order was not placed.'
           : ['permission-denied', 'firestore/permission-denied'].includes(error?.code)
@@ -512,7 +508,7 @@
         <p class="form-note ok" id="emailNote" style="min-height:0"></p>
         ${waBtn || mailBtn ? `<p class="muted" style="font-size:13.5px;margin-top:10px">${C2.whatsappNumber ? 'Tap below to send your order to us on WhatsApp' + (hasCustom && !order.items.some((item) => item.custom3d) ? ' — then attach your design file(s).' : ' for the fastest confirmation.') : `Tap below to email your order details to us at <b class="gold">${EH.esc(C2.email)}</b> so we can confirm it.`}</p>` : ''}
         <div class="success-actions"><button class="btn btn-outline" type="button" id="reopenTracking">${EH.icon('package')} Track Order</button>${waBtn}${mailBtn}<a class="btn btn-outline" href="shop.html">Continue Shopping</a></div>
-        ${hasCustom ? `<div class="panel order-card" style="margin-bottom:20px"><h2>${EH.icon('download')} Your Design Files</h2><p class="muted" style="font-size:13.5px;margin:-8px 0 12px">${order.items.some((item) => item.custom3d) ? 'Your 3D mockup, design details, and uploaded original file (if provided) are saved with this order. Download them here or anytime under ' : 'Print-ready files for your custom items are available here and anytime under ' }<a href="account.html" class="gold">My Orders</a>.</p>${EH.orderItemsHTML(order.items.filter((i) => i.custom), true)}</div>` : ''}
+        ${hasCustom ? `<div class="panel order-card" style="margin-bottom:20px"><h2>${EH.icon('download')} Your Design Files</h2><p class="muted" style="font-size:13.5px;margin:-8px 0 12px">${order.items.some((item) => item.custom3d) ? 'Your generated 3D GLB and compact order details are saved with this order. Preview images stay in your browser. Download them here or anytime under ' : 'Print-ready files for your custom items are available here and anytime under ' }<a href="account.html" class="gold">My Orders</a>.</p>${EH.orderItemsHTML(order.items.filter((i) => i.custom), true)}</div>` : ''}
         <div class="panel order-card"><h2>Order Summary</h2>${EH.orderItemsHTML(order.items)}<div style="margin-top:14px">${EH.totalsHTML(order.totals)}</div>
           <div class="form-grid" style="margin-top:20px;font-size:13px;color:var(--muted)">
             <div><b style="color:var(--text);display:block;margin-bottom:4px">Delivering to</b>${EH.esc(c.name)}<br>${EH.esc(c.address1)}${c.address2 ? ', ' + EH.esc(c.address2) : ''}<br>${EH.esc(c.city)}, ${EH.esc(c.state)} – ${EH.esc(c.pincode)}<br>${EH.esc(c.phone)}</div>

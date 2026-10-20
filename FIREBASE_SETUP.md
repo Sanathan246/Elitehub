@@ -8,7 +8,7 @@ The site uses Firebase Authentication and Cloud Firestore for account data. Cust
 - Web app: **Elitehub Web App**; its Firebase configuration is in `js/config.js`.
 - Authentication: **Email/Password** and **Google** providers are enabled. Customers and the administrator can use either.
 - Cloud Firestore: the default database is in **Mumbai** (`asia-south1`), created in production mode.
-- Orders and purchased 3D files are saved in Firestore. GLBs and related files are stored as 700 KiB binary chunks, then reassembled byte-for-byte for downloads. Customer-uploaded 3D models are limited to 20 MB; generated order assets can be up to 100 MB. Firestore's no-cost quota includes 1 GiB of stored data and daily read/write limits; check the [current Firestore quotas](https://firebase.google.com/docs/firestore/quotas).
+- Orders are saved in Firestore with compact product and design details. For a purchased 3D design, only the generated GLB is uploaded to Firebase as 700 KiB binary chunks and reassembled byte-for-byte for download. Preview images, the source model, and the full studio-state JSON stay in the customer's browser and are not uploaded during checkout. Generated GLBs can be up to 100 MB. Firestore's no-cost quota includes 1 GiB of stored data and daily read/write limits; check the [current Firestore quotas](https://firebase.google.com/docs/firestore/quotas).
 - Firestore rules: deploy the rules in `firestore.rules`. Customers can access their own profile and orders. New orders must start as **Placed** or **Payment pending** with no payment reference, and customers cannot delete orders (they cancel instead). For online payments, customers can submit a payment reference but cannot mark an order **Paid**. The verified administrator must confirm the payment in Razorpay, then update the order status. The administrator can also update fulfillment and tracking fields.
 - Authorized domains: `localhost`, `elitehub-f33fd.firebaseapp.com`, and `elitehub-f33fd.web.app`.
 
@@ -55,7 +55,7 @@ firebase deploy --only firestore:rules
 - Dedicated sign-in and account creation screens are available at `login.html` and `signup.html`.
 - Saved delivery details are stored in `users/{uid}`.
 - Orders are stored in `users/{uid}/orders/{orderId}` and loaded into My Orders on another device.
-- Saved preview libraries are not used. At checkout, the generated mockup, original uploaded 3D file (if provided), design/order details and preview are saved under an order-specific Firestore record.
-- My Orders and the administrator order page provide download links for the original uploaded model, generated mockup, preview and design details. Files download from Firestore when a local copy is unavailable.
+- Saved preview libraries are not used. At checkout, only the generated GLB is saved as a Firebase asset; compact design/order details are saved with the order. Previews, source models, and full studio-state JSON stay in browser storage.
+- My Orders and the administrator order page provide download links for the generated GLB and a JSON file of compact order details. The GLB downloads from Firestore when a local copy is unavailable.
 - Saved guest profiles remain local to the browser; checkout requires a signed-in account. Saved details on a device remember which account they belong to and are removed from the device on sign-out, so people sharing a computer never see each other's addresses.
 - Unsynced working design files stay in browser storage until checkout. Large order assets use chunked Firestore documents instead of embedding each full file in a single Firestore document.

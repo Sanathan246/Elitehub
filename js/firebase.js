@@ -153,13 +153,29 @@
       return new Blob([bytes], { type: metadata.contentType || 'application/octet-stream' });
     }
 
+    const cleanDesignDetails = (details = {}) => {
+      if (!details || typeof details !== 'object' || Array.isArray(details)) return {};
+      const limits = {
+        product: 120, kind: 40, productType: 40, orderType: 40, orderColor: 40,
+        color: 40, colorHex: 16, finish: 40, size: 40, model: 80, summary: 500
+      };
+      const clean = {};
+      Object.entries(limits).forEach(([key, max]) => {
+        if (details[key] !== undefined && details[key] !== null) clean[key] = String(details[key]).slice(0, max);
+      });
+      clean.quantity = Math.max(1, Math.min(20, Number(details.quantity) || 1));
+      clean.unitPrice = Math.max(0, Number(details.unitPrice) || 0);
+      return clean;
+    };
+
     const cleanOrder = (order = {}) => {
       const items = Array.isArray(order.items) ? order.items.map((item = {}) => {
         /* Images and local-only IDs stay in localStorage/IndexedDB. Keeping them
            out of Firestore prevents large custom previews from hitting the doc limit. */
-        const { image, key, lineId, sourceModelKey, ...cloudItem } = item;
+        const { image, key, lineId, sourceModelKey, sourceModelName, ...cloudItem } = item;
+        if (item.custom3d) cloudItem.designDetails = cleanDesignDetails(item.designDetails);
         if (cloudItem.customizationFiles && typeof cloudItem.customizationFiles === 'object') {
-          cloudItem.customizationFiles = Object.fromEntries(['mockup', 'details', 'preview', 'sourceModel']
+          cloudItem.customizationFiles = Object.fromEntries(['mockup']
             .filter((assetName) => typeof cloudItem.customizationFiles[assetName] === 'string')
             .map((assetName) => [assetName, cloudItem.customizationFiles[assetName]]));
         }
@@ -252,19 +268,13 @@
         const data = cleanOrder(order);
         const validFilesFor = (customizationId, files) => {
           if (!/^[A-Za-z0-9_-]{1,120}$/.test(customizationId) || !files || typeof files !== 'object') return false;
-          const allowed = ['mockup', 'details', 'preview', 'sourceModel'];
-          if (!['mockup', 'details', 'preview'].every((name) => typeof files[name] === 'string')
-            || Object.keys(files).some((name) => !allowed.includes(name))) return false;
+          if (typeof files.mockup !== 'string' || Object.keys(files).some((name) => name !== 'mockup')) return false;
           return Object.entries(files).every(([name, path]) => {
             const firestorePath = parseFirestoreAssetPath(uid, path);
             if (firestorePath) return firestorePath.customizationId === customizationId && firestorePath.assetName === name;
             const base = `users/${uid}/customizations/${customizationId}/`;
             const file = path.startsWith(base) ? path.slice(base.length) : '';
-            const allowedNames = {
-              mockup: ['mockup.glb'], details: ['details.json'], preview: ['preview.png'],
-              sourceModel: ['source-model.glb', 'source-model.gltf', 'source-model.obj', 'source-model.stl', 'source-model.fbx']
-            };
-            return allowedNames[name].includes(file);
+            return name === 'mockup' && file === 'mockup.glb';
           });
         };
         const batch = firestoreModule.writeBatch(db);
@@ -291,7 +301,7 @@
             size: String(item.size || '').slice(0, 40),
             model: String(item.model || '').slice(0, 80),
             summary: String(item.summary || '').slice(0, 1000),
-            sourceModelName: String(item.sourceModelName || '').slice(0, 160),
+            designDetails: cleanDesignDetails(item.designDetails),
             files: item.customizationFiles,
             createdAt: firestoreModule.serverTimestamp()
           });
@@ -372,25 +382,7 @@
         if (!uid || !auth.currentUser || auth.currentUser.uid !== uid) throw new Error('Sign in before placing an order for this 3D customization.');
         const customizationId = String(id || '');
         if (!/^[A-Za-z0-9_-]{1,120}$/.test(customizationId)) throw new Error('This customization ID is invalid. Please try again from the 3D studio.');
-        const specs = {
-          mockup: 'model/gltf-binary',
-          details: 'application/json',
-          preview: 'image/png'
-        };
-        const sourceModelName = String(metadata.sourceModelName || '').trim().slice(0, 160);
-        if (sourceModelName) {
-          const ext = (sourceModelName.split('.').pop() || '').toLowerCase();
-          const sourceSpecs = {
-            glb: 'model/gltf-binary',
-            gltf: 'model/gltf+json',
-            obj: 'application/octet-stream',
-            stl: 'application/octet-stream',
-            fbx: 'application/octet-stream'
-          };
-          if (!sourceSpecs[ext]) throw new Error('The original 3D file type is not supported.');
-          if (!(assets.sourceModel instanceof Blob) || !assets.sourceModel.size) throw new Error('The original uploaded 3D file could not be prepared.');
-          specs.sourceModel = sourceSpecs[ext];
-        }
+        const specs = { mockup: 'model/gltf-binary' };
         const paths = {};
         const onProgress = typeof options.onProgress === 'function' ? options.onProgress : null;
         await Promise.all(Object.entries(specs).map(async ([key, contentType]) => {
@@ -419,7 +411,7 @@
           unitPrice: Math.max(0, Number(metadata.unitPrice) || 0),
           summary: String(metadata.summary || '').slice(0, 1000),
           orderId: String(metadata.orderId || '').slice(0, 120),
-          sourceModelName,
+          designDetails: cleanDesignDetails(metadata.designDetails),
           assets: paths,
           updatedAt: firestoreModule.serverTimestamp()
         };

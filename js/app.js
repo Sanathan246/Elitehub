@@ -715,7 +715,7 @@
     try {
       let data = await EH.files.get(kind + ':' + customId);
       let record = null;
-      if (!data && ['print', 'mockup', 'details', 'preview', 'previewBlob', 'sourceModel'].includes(kind) && window.EHFirebase?.enabled) {
+      if (!data && ['print', 'mockup', 'details', 'orderDetails', 'preview', 'previewBlob', 'sourceModel'].includes(kind) && window.EHFirebase?.enabled) {
         const api = window.EHFirebase;
         await api.ready;
         const uid = ownerUid || api.currentUser?.uid;
@@ -726,6 +726,16 @@
                take the artwork back out of the design details saved with the order. */
             data = await printFromDetails(api, uid, record);
             if (!data && record?.assets?.preview) data = await api.downloadCustomizationAsset(uid, record.assets.preview);
+          } else if (kind === 'orderDetails' && record?.designDetails && typeof record.designDetails === 'object') {
+            data = new Blob([JSON.stringify({
+              customizationId: record.id || customId,
+              orderId: record.orderId || '',
+              ...record.designDetails,
+            }, null, 2)], { type: 'application/json' });
+          } else if (kind === 'orderDetails' && record?.assets?.details) {
+            // Compatibility for orders created before previews and full design JSON
+            // were removed from new Firebase uploads.
+            data = await api.downloadCustomizationAsset(uid, record.assets.details);
           } else {
             const asset = kind === 'previewBlob' || kind === 'preview' ? 'preview' : kind;
             const path = record?.assets?.[asset];
@@ -736,7 +746,7 @@
       if (!data) { EH.toast('That design file is no longer stored on this device or account.', { type: 'error' }); return; }
       const extension = kind === 'sourceModel'
         ? ((record?.sourceModelName || filename || '').split('.').pop() || 'glb').toLowerCase()
-        : ({ mockup: 'glb', details: 'json', preview: 'png', previewBlob: 'png' }[kind] || 'png');
+        : ({ mockup: 'glb', details: 'json', orderDetails: 'json', preview: 'png', previewBlob: 'png' }[kind] || 'png');
       if (kind === 'print' && typeof data === 'string') {
         const type = (data.match(/^data:image\/(png|jpe?g|webp|svg\+xml)/i) || [])[1] || 'png';
         const ext = type.toLowerCase().replace('jpeg', 'jpg').replace('svg+xml', 'svg');
@@ -771,13 +781,14 @@
     const name = EH.esc(it.name || 'Item');
     const customId = it.customId ? EH.esc(String(it.customId)) : '';
     const ownerUid = EH.esc(String(it.customizationOwnerUid || ''));
-    const sourceModelName = String(it.sourceModelName || '');
-    const sourceExtension = ((sourceModelName.match(/\.([a-z0-9]+)$/i) || [])[1] || '3d').toUpperCase();
     const ownerAttribute = ownerUid ? ` data-owner-uid="${ownerUid}"` : '';
+    const fileButtons = it.custom3d
+      ? `<button type="button" class="link-arrow" data-dl-design="${customId}" data-kind="mockup" data-file="${customId}-mockup.glb"${ownerAttribute} style="font-size:12px;color:var(--gold)">${EH.icon('download')} 3D mockup (.GLB)</button><button type="button" class="link-arrow" data-dl-design="${customId}" data-kind="orderDetails" data-file="${customId}-order-details.json"${ownerAttribute} style="font-size:12px">${EH.icon('download')} Order details (.JSON)</button>`
+      : `<button type="button" class="link-arrow" data-dl-design="${customId}" data-kind="print" data-file="${customId}-print-file.png"${ownerAttribute} style="font-size:12px;color:var(--gold)">${EH.icon('download')} Print file</button><button type="button" class="link-arrow" data-dl-design="${customId}" data-kind="preview" data-file="${customId}-preview.png"${ownerAttribute} style="font-size:12px">${EH.icon('download')} Preview</button>`;
     return `<div class="sum-item">
       <div class="cart-thumb">${EH.thumbHTML(it)}<span class="q">${qty}</span></div>
       <div><h4>${name}${it.custom ? '<span class="tag-custom">Custom</span>' : ''}</h4><div class="meta">${EH.esc(EH.optionMeta(it))}</div>
-        ${withFiles && it.custom && customId ? `<div style="display:flex;gap:12px;margin-top:6px;flex-wrap:wrap"><button type="button" class="link-arrow" data-dl-design="${customId}" data-kind="print" data-file="${customId}-print-file.png"${ownerAttribute} style="font-size:12px;color:var(--gold)">${EH.icon('download')} Print file</button><button type="button" class="link-arrow" data-dl-design="${customId}" data-kind="preview" data-file="${customId}-preview.png"${ownerAttribute} style="font-size:12px">${EH.icon('download')} Preview</button>${it.custom3d ? `<button type="button" class="link-arrow" data-dl-design="${customId}" data-kind="mockup" data-file="${customId}-mockup.glb"${ownerAttribute} style="font-size:12px">${EH.icon('download')} 3D mockup (.GLB)</button><button type="button" class="link-arrow" data-dl-design="${customId}" data-kind="details" data-file="${customId}-details.json"${ownerAttribute} style="font-size:12px">${EH.icon('download')} Design details (.JSON)</button>${sourceModelName ? `<button type="button" class="link-arrow" data-dl-design="${customId}" data-kind="sourceModel" data-file="${EH.esc(sourceModelName)}"${ownerAttribute} style="font-size:12px">${EH.icon('download')} Original uploaded model (.${EH.esc(sourceExtension)})</button>` : ''}` : ''}</div>` : ''}</div>
+        ${withFiles && it.custom && customId ? `<div style="display:flex;gap:12px;margin-top:6px;flex-wrap:wrap">${fileButtons}</div>` : ''}</div>
       <div class="price" style="font-size:13.5px;font-weight:600">${EH.money((Number(it.price) || 0) * qty)}</div>
     </div>`;
   }).join('');
@@ -814,7 +825,7 @@
       `*Total: ${EH.money(o.totals.total)}*`,
       `Payment: ${EH.paymentLabel(o.payment)}${o.paymentId ? ' (' + o.paymentId + ')' : ''}`,
       c.notes ? `Notes: ${c.notes}` : null,
-      o.items.some((i) => i.custom3d) ? '\nThe 3D mockup, design details, and any original uploaded model are stored with this order. Open this order in the store dashboard to download them.'
+      o.items.some((i) => i.custom3d) ? '\nThe generated 3D GLB and compact order details are stored with this order. Preview images remain in the customer’s browser.'
         : o.items.some((i) => i.custom) ? '\nI will share my custom design file(s) with you.' : null
     ];
     return lines.filter((l) => l !== null).join('\n');

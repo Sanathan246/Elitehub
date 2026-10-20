@@ -60,6 +60,48 @@ service cloud.firestore {
       && path == 'firestore://' + userId + '/' + customizationId + '/' + assetName;
   }
 
+  function validDesignDetails(details) {
+    return details is map
+      && details.keys().hasOnly([
+        'product', 'kind', 'productType', 'orderType', 'orderColor', 'color',
+        'colorHex', 'finish', 'size', 'model', 'quantity', 'unitPrice', 'summary'
+      ])
+      && (!('product' in details) || (details.product is string && details.product.size() <= 120))
+      && (!('kind' in details) || (details.kind is string && details.kind.size() <= 40))
+      && (!('productType' in details) || (details.productType is string && details.productType.size() <= 40))
+      && (!('orderType' in details) || (details.orderType is string && details.orderType.size() <= 40))
+      && (!('orderColor' in details) || (details.orderColor is string && details.orderColor.size() <= 40))
+      && (!('color' in details) || (details.color is string && details.color.size() <= 40))
+      && (!('colorHex' in details) || (details.colorHex is string && details.colorHex.size() <= 16))
+      && (!('finish' in details) || (details.finish is string && details.finish.size() <= 40))
+      && (!('size' in details) || (details.size is string && details.size.size() <= 40))
+      && (!('model' in details) || (details.model is string && details.model.size() <= 80))
+      && (!('summary' in details) || (details.summary is string && details.summary.size() <= 500))
+      && (!('quantity' in details) || (details.quantity is int && details.quantity >= 1 && details.quantity <= 20))
+      && (!('unitPrice' in details) || ((details.unitPrice is int || details.unitPrice is float) && details.unitPrice >= 0 && details.unitPrice <= 100000000));
+  }
+
+  function validCustomizationRecord(userId, customizationId) {
+    let data = request.resource.data;
+    let assets = data.assets;
+    return isOwner(userId)
+      && data.keys().hasOnly([
+        'id', 'ownerUid', 'name', 'product', 'kind', 'productType', 'orderType',
+        'orderColor', 'color', 'colorHex', 'finish', 'size', 'model', 'quantity',
+        'unitPrice', 'summary', 'orderId', 'designDetails', 'assets', 'updatedAt', 'createdAt'
+      ])
+      && data.id == customizationId
+      && data.ownerUid == userId
+      && data.orderId is string
+      && data.orderId.size() > 0
+      && data.orderId.size() <= 120
+      && validDesignDetails(data.designDetails)
+      && assets is map
+      && assets.keys().hasOnly(['mockup'])
+      && assets.keys().hasAll(['mockup'])
+      && validOrderAssetPath(userId, customizationId, 'mockup', assets.mockup);
+  }
+
   function validOrderCustomization(userId, orderId, customizationId) {
     let orderPath = /databases/$(database)/documents/users/$(userId)/orders/$(orderId);
     let files = request.resource.data.files;
@@ -70,12 +112,10 @@ service cloud.firestore {
       && request.resource.data.orderId == orderId
       && request.resource.data.ownerUid == userId
       && files is map
-      && files.keys().hasOnly(['mockup', 'details', 'preview', 'sourceModel'])
-      && files.keys().hasAll(['mockup', 'details', 'preview'])
+      && files.keys().hasOnly(['mockup'])
+      && files.keys().hasAll(['mockup'])
       && validOrderAssetPath(userId, customizationId, 'mockup', files.mockup)
-      && validOrderAssetPath(userId, customizationId, 'details', files.details)
-      && validOrderAssetPath(userId, customizationId, 'preview', files.preview)
-      && (!('sourceModel' in files) || validOrderAssetPath(userId, customizationId, 'sourceModel', files.sourceModel));
+      && validDesignDetails(request.resource.data.designDetails);
   }
 
   function customerSubmitPaymentReference(userId) {
@@ -95,15 +135,17 @@ service cloud.firestore {
 
       match /customizations/{customizationId} {
         allow read: if isOwner(userId) || isAdmin();
-        allow create: if isOwner(userId);
+        allow create: if validCustomizationRecord(userId, customizationId);
         // Keep purchased design metadata and its file paths intact for fulfillment.
-        allow update, delete: if isAdmin() || (isOwner(userId) && !customizationHasOrder(userId));
+        allow update: if isAdmin() || (isOwner(userId) && !customizationHasOrder(userId)
+          && validCustomizationRecord(userId, customizationId));
+        allow delete: if isAdmin() || (isOwner(userId) && !customizationHasOrder(userId));
 
         match /assets/{assetName} {
           allow read: if isOwner(userId) || isAdmin();
           allow create, update: if isOwner(userId)
             && !customizationHasOrderById(userId, customizationId)
-            && assetName in ['mockup', 'details', 'preview', 'sourceModel']
+            && assetName == 'mockup'
             && request.resource.data.uploadId is string
             && request.resource.data.uploadId.size() > 0
             && request.resource.data.uploadId.size() <= 100
@@ -112,17 +154,16 @@ service cloud.firestore {
             && request.resource.data.chunkCount <= 150
             && request.resource.data.size is int
             && request.resource.data.size > 0
-            && ((assetName == 'sourceModel' && request.resource.data.size <= 20971520)
-              || (assetName != 'sourceModel' && request.resource.data.size <= 104857600))
+            && request.resource.data.size <= 104857600
             && request.resource.data.contentType is string
-            && request.resource.data.contentType in ['model/gltf-binary', 'model/gltf+json', 'application/json', 'image/png', 'application/octet-stream'];
+            && request.resource.data.contentType == 'model/gltf-binary';
           allow delete: if isAdmin() || (isOwner(userId) && !customizationHasOrderById(userId, customizationId));
 
           match /chunks/{chunkId} {
             allow read: if isOwner(userId) || isAdmin();
             allow create, update: if isOwner(userId)
               && !customizationHasOrderById(userId, customizationId)
-              && assetName in ['mockup', 'details', 'preview', 'sourceModel']
+              && assetName == 'mockup'
               && request.resource.data.uploadId is string
               && request.resource.data.uploadId.size() > 0
               && request.resource.data.uploadId.size() <= 100

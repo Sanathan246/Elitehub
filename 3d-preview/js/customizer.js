@@ -935,6 +935,13 @@ async function addToBag() {
       custom: true, custom3d: true, customId, name, type, color: catalogueColorId(), size: T.sizes ? S.size : undefined, model: T.models ? S.model : undefined,
       sourceModelKey: sourceModelKey || undefined,
       sourceModelName: sourceModelKey ? (studio.model?.fileName || '') : '',
+      designDetails: {
+        product: details.product, kind: details.kind, productType: details.productType,
+        orderType: details.orderType, orderColor: details.orderColor, color: details.color,
+        colorHex: details.colorHex, finish: details.finish, size: details.size,
+        model: details.model, quantity: details.quantity, unitPrice: details.unitPrice,
+        summary: details.summary,
+      },
       qty: S.qty, price: T.basePrice + EH.sizeAdd(type, S.size), image, summary: details.summary,
     });
     if (!ok) return;
