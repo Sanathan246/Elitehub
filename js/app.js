@@ -439,19 +439,117 @@
     const active = currentNav();
     const head = EH.$('#site-header');
     if (head) {
-      head.outerHTML = `<header class="site-header ${document.body.dataset.header === 'solid' ? 'solid' : ''}" id="siteHeader">
-        <div class="container header-inner">
-          <a class="brand" href="index.html" aria-label="${C.brandName} — home"><img class="brand-mono" src="assets/logo-monogram.png" alt="" width="46" height="48"><img class="brand-word" src="assets/logo-wordmark.png" alt="${C.brandName}" width="113" height="25"></a>
-          <nav class="main-nav" aria-label="Main">${NAV.map(([k, h, l]) => `<a href="${h}" class="${k === active ? 'active' : ''}"${k === active ? ' aria-current="page"' : ''}>${l}</a>`).join('')}</nav>
-          <div class="header-actions">
-            <button class="icon-btn" type="button" data-open-search aria-label="Search">${EH.icon('search')}</button>
-            <a class="icon-btn" href="account.html" aria-label="My account &amp; orders">${EH.icon('user')}</a>
-            <button class="icon-btn" type="button" data-open-cart aria-label="Open cart">${EH.icon('cart')}<span class="cart-badge" hidden>0</span></button>
-            <button class="icon-btn menu-btn" type="button" data-toggle-menu aria-label="Menu" aria-controls="mobileNav" aria-expanded="false">${EH.icon('menu')}</button>
+      head.outerHTML = `
+        <div class="top-announcement-bar">
+          <div class="container announcement-inner">
+            <span>🚀 Free Express Shipping across India on orders over ₹999</span>
+            <span class="announcement-pill">Code: <b>ELITE10</b> for 10% Off</span>
+            <a href="contact.html" class="announcement-link">24/7 Support</a>
           </div>
         </div>
-      </header>
-      <nav class="mobile-nav" id="mobileNav" aria-label="Mobile" aria-hidden="true" inert>${NAV.concat([['customize', '3d-preview/customizer.html', '3D Studio'], ['account', 'account.html', 'My Orders']]).map(([k, h, l]) => `<a href="${h}" class="${k === active ? 'active' : ''}">${l}</a>`).join('')}</nav>`;
+        <header class="site-header ${document.body.dataset.header === 'solid' ? 'solid' : ''}" id="siteHeader">
+          <div class="container header-main-row">
+            <div class="header-left">
+              <button class="icon-btn menu-btn" type="button" data-toggle-menu aria-label="Menu" aria-controls="mobileNav" aria-expanded="false">${EH.icon('menu')}</button>
+              <a class="brand" href="index.html" aria-label="${C.brandName} — home">
+                <img class="brand-mono" src="assets/logo-monogram.png" alt="" width="46" height="48">
+                <img class="brand-word" src="assets/logo-wordmark.png" alt="${C.brandName}" width="113" height="25">
+              </a>
+            </div>
+
+            <button class="header-location" type="button" id="headerLocationBtn" aria-label="Choose delivery location">
+              <span class="loc-pin">${EH.icon('pin')}</span>
+              <div class="loc-text">
+                <span class="loc-sub">Deliver to</span>
+                <span class="loc-main" id="locCity">India</span>
+              </div>
+            </button>
+
+            <div class="header-search-wrap" id="headerSearchWrap">
+              <form class="amazon-search-form" id="mainSearchForm" action="shop.html" role="search">
+                <div class="search-cat-select-wrap">
+                  <select class="search-cat-select" id="searchCategory" aria-label="Select Category">
+                    <option value="all">All</option>
+                    <option value="clothing">Clothing</option>
+                    <option value="accessories">Accessories</option>
+                    <option value="phone-cases">Phone Cases</option>
+                    <option value="home-living">Home &amp; Living</option>
+                  </select>
+                </div>
+                <input type="search" class="amazon-search-input" id="mainSearchInput" name="q" placeholder="Search tees, hoodies, custom 3D gifts..." autocomplete="off" aria-label="Search EliteHub">
+                <button type="button" class="search-clear-btn" id="searchClearBtn" aria-label="Clear search" hidden>${EH.icon('x', 'ico-sm')}</button>
+                <button type="submit" class="amazon-search-submit" aria-label="Search submit">${EH.icon('search')}</button>
+              </form>
+              <div class="search-autocomplete-dropdown" id="searchAutocomplete" hidden></div>
+            </div>
+
+            <div class="header-actions">
+              <button class="icon-btn mobile-search-toggle" type="button" id="mobileSearchToggle" aria-label="Search">${EH.icon('search')}</button>
+              
+              <div class="account-menu-wrapper" id="accountMenuWrapper">
+                <a class="nav-account-btn" href="account.html" id="navAccountBtn" aria-haspopup="true" aria-expanded="false">
+                  <div class="nav-line-1" id="navUserGreeting">Hello, Sign in</div>
+                  <div class="nav-line-2">Account &amp; Orders <i class="dropdown-caret">▾</i></div>
+                </a>
+                <div class="account-flyout" id="accountFlyout">
+                  <div class="flyout-top" id="flyoutAuthAction">
+                    <a class="btn btn-gold btn-sm btn-block" href="login.html" id="flyoutSignInBtn">Sign In</a>
+                    <p class="flyout-new">New customer? <a href="signup.html">Start here.</a></p>
+                  </div>
+                  <div class="flyout-divider"></div>
+                  <div class="flyout-links">
+                    <strong>Your EliteHub</strong>
+                    <a href="account.html#ordersSection">Your Orders</a>
+                    <a href="account.html#savedDetails">Saved Addresses</a>
+                    <a href="account.html#loginSecurity">Login &amp; Security</a>
+                    <a href="3d-preview/customizer.html">3D Studio Customizer</a>
+                    <a href="admin.html" id="flyoutAdminLink" hidden>Admin Orders</a>
+                    <button type="button" class="flyout-signout-btn" id="flyoutSignOutBtn" hidden>Sign Out</button>
+                  </div>
+                </div>
+              </div>
+
+              <a class="nav-orders-btn" href="account.html#ordersSection" aria-label="Returns and orders">
+                <span class="nav-line-1">Returns</span>
+                <span class="nav-line-2">&amp; Orders</span>
+              </a>
+
+              <button class="nav-cart-btn" type="button" data-open-cart aria-label="Open cart">
+                <span class="cart-icon-wrap">
+                  ${EH.icon('cart')}
+                  <span class="cart-badge" hidden>0</span>
+                </span>
+                <span class="cart-label">Cart</span>
+              </button>
+            </div>
+          </div>
+
+          <nav class="sub-navbar" aria-label="Store departments">
+            <div class="container subnav-inner">
+              <button class="subnav-all-btn" type="button" data-toggle-menu>
+                ${EH.icon('menu', 'ico-sm')} <span>All</span>
+              </button>
+              <a href="3d-preview/customizer.html" class="subnav-item highlight">
+                <span class="sparkle-ico">${EH.icon('sparkles', 'ico-sm')}</span> 3D Studio <span class="subnav-pill">Custom</span>
+              </a>
+              <a href="shop.html?type=tshirt" class="subnav-item">Oversized Tees</a>
+              <a href="shop.html?type=hoodie" class="subnav-item">Hoodies &amp; Sweats</a>
+              <a href="shop.html?type=mug" class="subnav-item">Ceramic Mugs</a>
+              <a href="shop.html?type=phonecase" class="subnav-item">Phone Cases</a>
+              <a href="shop.html?type=cushion" class="subnav-item">Home &amp; Living</a>
+              <a href="shop.html?type=frame" class="subnav-item">Framed Posters</a>
+              <a href="shop.html?tag=trending" class="subnav-item">Trending Drops</a>
+              <a href="contact.html" class="subnav-item">Customer Service</a>
+            </div>
+          </nav>
+        </header>
+        <nav class="mobile-nav" id="mobileNav" aria-label="Mobile" aria-hidden="true" inert>
+          <div style="padding:10px 0 16px;border-bottom:1px solid var(--line);margin-bottom:10px">
+            <div style="font-size:11px;color:var(--muted)">Welcome to EliteHub</div>
+            <strong style="color:var(--gold);font-size:16px" id="mobileUserGreeting">Hello, Sign in</strong>
+          </div>
+          ${NAV.concat([['customize', '3d-preview/customizer.html', '3D Studio'], ['account', 'account.html', 'My Account & Orders']]).map(([k, h, l]) => `<a href="${h}" class="${k === active ? 'active' : ''}">${l}</a>`).join('')}
+        </nav>`;
     }
     const foot = EH.$('#site-footer');
     if (foot) {
@@ -484,6 +582,226 @@
         </div>
       </div>
       ${C.whatsappNumber ? `<a class="wa-float" href="${EH.waLink('Hi ' + C.brandName + '! I have a question.')}" target="_blank" rel="noopener" aria-label="Chat on WhatsApp">${EH.icon('whatsapp')}</a>` : ''}`);
+  }
+
+  /* Location Pincode Modal */
+  EH.openLocationPicker = () => {
+    const saved = EH.store.get('eh_user_pincode', null);
+    const m = EH.modal.open(`
+      <h3>Choose your delivery location</h3>
+      <p class="muted" style="font-size:13px;margin:6px 0 18px">Delivery availability and speed depend on your pincode in India.</p>
+      <form id="pincodeModalForm">
+        <div class="field">
+          <label for="modalPinInput">Enter a 6-digit Indian PIN code</label>
+          <div style="display:flex;gap:8px;margin-top:6px">
+            <input class="input" id="modalPinInput" maxlength="6" inputmode="numeric" placeholder="e.g. 110001, 400001, 560001" value="${saved ? EH.esc(saved.pincode) : ''}" required style="letter-spacing:0.08em;font-weight:600">
+            <button class="btn btn-gold btn-sm" type="submit" id="applyPinBtn">Apply</button>
+          </div>
+          <span class="err-msg" id="modalPinError">Please enter a valid 6-digit Indian PIN code.</span>
+        </div>
+      </form>
+      <div id="modalPinResult" style="margin-top:16px;font-size:13px;line-height:1.5">
+        ${saved ? `<div style="padding:12px;border:1px solid var(--line);border-radius:10px;background:rgba(255,255,255,0.02)">
+          <p style="margin:0">Currently delivering to: <strong class="gold">${EH.esc(saved.city || 'India')} (${EH.esc(saved.pincode)})</strong></p>
+          <span class="muted" style="font-size:12px;display:block;margin-top:4px">Standard: 3–5 business days | Express: 2–3 business days</span>
+        </div>` : ''}
+      </div>
+    `);
+
+    const form = m.querySelector('#pincodeModalForm');
+    const input = m.querySelector('#modalPinInput');
+    const resultBox = m.querySelector('#modalPinResult');
+    if (input) input.focus();
+
+    if (form) {
+      form.addEventListener('submit', (e) => {
+        e.preventDefault();
+        const pin = input.value.trim();
+        if (!/^[1-9]\d{5}$/.test(pin)) {
+          input.closest('.field').classList.add('invalid');
+          return;
+        }
+        input.closest('.field').classList.remove('invalid');
+
+        const regions = {
+          '1': 'Delhi / NCR',
+          '2': 'UP / Uttarakhand',
+          '3': 'Rajasthan / Gujarat',
+          '4': 'Maharashtra / MP',
+          '5': 'South / Karnataka',
+          '6': 'Tamil Nadu / Kerala',
+          '7': 'East / WB',
+          '8': 'Bihar / Jharkhand'
+        };
+        const city = regions[pin[0]] || 'India';
+        EH.store.set('eh_user_pincode', { pincode: pin, city });
+        const locCity = EH.$('#locCity');
+        if (locCity) locCity.textContent = city;
+
+        resultBox.innerHTML = `
+          <div style="padding:12px;border:1px solid var(--gold-line);border-radius:10px;background:rgba(230,191,134,0.06);color:var(--text)">
+            <p style="margin:0"><strong class="gold">✓ Delivering to ${city} (${pin})</strong></p>
+            <span class="muted" style="font-size:12px;display:block;margin-top:4px">Fastest Delivery: 2–4 business days. Free shipping on orders over ${EH.money(C.freeShippingThreshold || 999)}.</span>
+          </div>
+        `;
+        EH.toast(`Delivery location updated to ${city} (${pin})`);
+        setTimeout(() => EH.modal.close(), 800);
+      });
+    }
+  };
+
+  /* Amazon Live Autocomplete */
+  function setupAmazonSearch() {
+    const input = EH.$('#mainSearchInput');
+    const dropdown = EH.$('#searchAutocomplete');
+    const clearBtn = EH.$('#searchClearBtn');
+    const form = EH.$('#mainSearchForm');
+    const catSelect = EH.$('#searchCategory');
+    const wrap = EH.$('#headerSearchWrap');
+    if (!input || !dropdown) return;
+
+    let debounceTimer;
+    function renderSuggestions(q) {
+      const trimmed = q.trim();
+      if (!trimmed) {
+        dropdown.hidden = true;
+        dropdown.innerHTML = '';
+        if (clearBtn) clearBtn.hidden = true;
+        return;
+      }
+      if (clearBtn) clearBtn.hidden = false;
+      const selectedCat = catSelect ? catSelect.value : 'all';
+      let results = EH.searchProducts(trimmed);
+      if (selectedCat && selectedCat !== 'all') {
+        results = results.filter((p) => EH.productCategory(p) === selectedCat);
+      }
+      if (!results.length) {
+        dropdown.hidden = false;
+        dropdown.innerHTML = `
+          <div class="ac-header">Search results</div>
+          <div style="padding:16px;text-align:center;color:var(--muted);font-size:13px">
+            No exact matches for “${EH.esc(trimmed)}”
+            <div style="margin-top:8px"><a href="shop.html?q=${encodeURIComponent(trimmed)}" class="gold">Search all products →</a></div>
+          </div>`;
+        return;
+      }
+      dropdown.hidden = false;
+      dropdown.innerHTML = `
+        <div class="ac-header">Matching products (${results.length})</div>
+        ${results.slice(0, 5).map((p) => `
+          <a class="ac-item" href="product.html?id=${encodeURIComponent(p.id)}">
+            <div class="ac-thumb">${EH.productSVG(p)}</div>
+            <div class="ac-info">
+              <div class="ac-title">${EH.esc(p.name)}</div>
+              <div class="ac-sub">
+                <span>${EH.esc(EH.productSubtitle(p))}</span>
+                <span>★ ${(p.rating || 4.8).toFixed(1)}</span>
+              </div>
+            </div>
+            <div class="ac-price">${EH.money(p.price)}</div>
+          </a>
+        `).join('')}
+        <div class="ac-footer">
+          <a href="shop.html?q=${encodeURIComponent(trimmed)}${selectedCat !== 'all' ? `&cat=${selectedCat}` : ''}">See all ${results.length} results for “${EH.esc(trimmed)}” →</a>
+        </div>`;
+    }
+
+    input.addEventListener('input', () => {
+      clearTimeout(debounceTimer);
+      debounceTimer = setTimeout(() => renderSuggestions(input.value), 120);
+    });
+    if (clearBtn) {
+      clearBtn.addEventListener('click', () => {
+        input.value = '';
+        renderSuggestions('');
+        input.focus();
+      });
+    }
+    if (catSelect) {
+      catSelect.addEventListener('change', () => {
+        if (input.value.trim()) renderSuggestions(input.value);
+      });
+    }
+    document.addEventListener('click', (e) => {
+      if (!e.target.closest('#headerSearchWrap')) {
+        dropdown.hidden = true;
+      }
+    });
+    input.addEventListener('focus', () => {
+      if (input.value.trim()) renderSuggestions(input.value);
+    });
+    if (form) {
+      form.addEventListener('submit', (e) => {
+        const cat = catSelect ? catSelect.value : 'all';
+        if (cat && cat !== 'all') {
+          e.preventDefault();
+          location.href = `shop.html?q=${encodeURIComponent(input.value.trim())}&cat=${encodeURIComponent(cat)}`;
+        }
+      });
+    }
+  }
+
+  /* Firebase Header Auth Listener */
+  function setupHeaderAuth() {
+    function update(user) {
+      const greeting = EH.$('#navUserGreeting');
+      const mobileGreeting = EH.$('#mobileUserGreeting');
+      const flyoutAuth = EH.$('#flyoutAuthAction');
+      const flyoutAdmin = EH.$('#flyoutAdminLink');
+      const flyoutSignOut = EH.$('#flyoutSignOutBtn');
+      const locCity = EH.$('#locCity');
+      const adminEmail = String(C.adminEmail || '').trim().toLowerCase();
+
+      if (user) {
+        const firstName = user.displayName ? user.displayName.split(' ')[0] : (user.email ? user.email.split('@')[0] : 'Member');
+        if (greeting) greeting.textContent = `Hello, ${firstName}`;
+        if (mobileGreeting) mobileGreeting.textContent = `Hello, ${firstName}`;
+        if (flyoutAuth) {
+          flyoutAuth.innerHTML = `
+            <div style="font-size:11px;color:var(--muted)">Signed in as</div>
+            <strong style="color:var(--gold);display:block;font-size:13px;word-break:break-all">${EH.esc(user.email || user.displayName || 'Member')}</strong>
+          `;
+        }
+        if (flyoutSignOut) flyoutSignOut.hidden = false;
+        if (flyoutAdmin && adminEmail && String(user.email || '').toLowerCase() === adminEmail) {
+          flyoutAdmin.hidden = false;
+        }
+        const local = EH.localProfile.read(user.uid);
+        if (local && local.city && locCity) {
+          locCity.textContent = local.city;
+        } else if (window.EHFirebase && window.EHFirebase.enabled) {
+          window.EHFirebase.loadProfile(user.uid).then((prof) => {
+            if (prof && prof.city && locCity) locCity.textContent = prof.city;
+          }).catch(() => {});
+        }
+      } else {
+        if (greeting) greeting.textContent = 'Hello, Sign in';
+        if (mobileGreeting) mobileGreeting.textContent = 'Hello, Sign in';
+        if (flyoutAuth) {
+          flyoutAuth.innerHTML = `
+            <a class="btn btn-gold btn-sm btn-block" href="login.html" id="flyoutSignInBtn">Sign In</a>
+            <p class="flyout-new">New customer? <a href="signup.html">Start here.</a></p>
+          `;
+        }
+        if (flyoutSignOut) flyoutSignOut.hidden = true;
+        if (flyoutAdmin) flyoutAdmin.hidden = true;
+        const savedPin = EH.store.get('eh_user_pincode', null);
+        if (locCity) locCity.textContent = savedPin ? savedPin.city : 'India';
+      }
+    }
+
+    document.addEventListener('firebase:auth-changed', (e) => update(e.detail ? e.detail.user : null));
+    document.addEventListener('firebase:ready', (e) => {
+      const api = e.detail && e.detail.api ? e.detail.api : window.EHFirebase;
+      if (api && api.currentUser) update(api.currentUser);
+    });
+    if (window.EHFirebase && window.EHFirebase.currentUser) {
+      update(window.EHFirebase.currentUser);
+    } else {
+      const savedPin = EH.store.get('eh_user_pincode', null);
+      const locCity = EH.$('#locCity');
+      if (locCity && savedPin) locCity.textContent = savedPin.city;
+    }
   }
 
   /* ---------------- drawer ---------------- */
@@ -604,10 +922,29 @@
   EH.productCard = (p, i = 0) => {
     if (!p) return '';
     const badge = (p.tags || []).includes('new') ? 'New' : (p.tags || []).includes('bestseller') ? 'Bestseller' : '';
+    const off = p.mrp ? Math.round((1 - p.price / p.mrp) * 100) : 0;
+    const stars = Array.from({ length: 5 }, (_, idx) => EH.icon('star').replace('fill="none"', idx < Math.round(p.rating || 5) ? 'fill="currentColor"' : 'fill="none"')).join('');
     return `<article class="p-card reveal d${(i % 5) + 1}">
-      <a class="p-media" href="product.html?id=${p.id}" aria-label="${EH.esc(p.name)}">${badge ? `<span class="p-badge">${badge}</span>` : ''}${EH.productSVG(p)}</a>
-      <div class="p-body"><a class="p-name" href="product.html?id=${p.id}">${EH.esc(p.name)}</a><div class="p-sub">${EH.esc(EH.productSubtitle(p))}</div>
-        <div class="p-foot"><span class="p-price">${EH.money(p.price)}</span><button class="p-add" type="button" data-quick-add="${p.id}" aria-label="Add ${EH.esc(p.name)} to bag">${EH.icon('plus')}</button></div></div>
+      <a class="p-media" href="product.html?id=${p.id}" aria-label="${EH.esc(p.name)}">
+        ${badge ? `<span class="p-badge">${badge}</span>` : ''}
+        ${EH.productSVG(p)}
+      </a>
+      <div class="p-body">
+        <a class="p-name" href="product.html?id=${p.id}">${EH.esc(p.name)}</a>
+        <div class="p-sub">${EH.esc(EH.productSubtitle(p))}</div>
+        <div class="p-rating-row">
+          <span class="p-rating-stars">${stars}</span>
+          <span>${(p.rating || 4.8).toFixed(1)} (${p.reviews || 42})</span>
+        </div>
+        <div class="p-delivery-tag">FREE Delivery <b>over ${EH.money(C.freeShippingThreshold || 999)}</b></div>
+        <div class="p-foot">
+          <div class="p-price-wrap">
+            <span class="p-price">${EH.money(p.price)}</span>
+            ${p.mrp ? `<s>${EH.money(p.mrp)}</s><span class="p-off-pill">${off}% OFF</span>` : ''}
+          </div>
+          <button class="p-add" type="button" data-quick-add="${p.id}" aria-label="Add ${EH.esc(p.name)} to bag" title="Add to Bag">${EH.icon('plus')}</button>
+        </div>
+      </div>
     </article>`;
   };
   EH.quickAdd = (id) => {
@@ -907,6 +1244,23 @@
       if (dl) EH.downloadDesign(dl.dataset.dlDesign, dl.dataset.kind || 'print', dl.dataset.file, dl.dataset.ownerUid || '');
       const acc = t.closest('.acc-head');
       if (acc) { const item = acc.parentElement; item.classList.toggle('open'); acc.setAttribute('aria-expanded', item.classList.contains('open')); }
+      if (t.closest('#headerLocationBtn')) { e.preventDefault(); EH.openLocationPicker(); }
+      if (t.closest('#mobileSearchToggle')) {
+        const wrap = EH.$('#headerSearchWrap');
+        if (wrap) {
+          const open = wrap.classList.toggle('mobile-open');
+          if (open) { const inp = EH.$('#mainSearchInput'); if (inp) setTimeout(() => inp.focus(), 60); }
+        }
+      }
+      if (t.closest('#flyoutSignOutBtn')) {
+        e.preventDefault();
+        if (window.EHFirebase && window.EHFirebase.enabled) {
+          window.EHFirebase.signOut().then(() => {
+            EH.localProfile.clear();
+            EH.toast('You have signed out');
+          }).catch((err) => console.error(err));
+        }
+      }
     });
     document.addEventListener('change', (e) => { if (e.target.matches('[data-line-input]')) EH.cart.setQty(e.target.dataset.lineInput, parseInt(e.target.value, 10) || 1); });
     document.addEventListener('keydown', (e) => { if (e.key === 'Escape') { EH.closeCart(); closeSearch(); closeMenu(); EH.modal.close(); } });

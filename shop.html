@@ -32,21 +32,63 @@
 
     <section class="section-sm">
       <div class="container">
-        <div class="shop-toolbar">
-          <div class="chips" id="catChips" role="tablist" aria-label="Filter by category"></div>
-          <div class="toolbar-right">
-            <label class="search-field"><i data-icon="search"></i><input type="search" id="shopSearch" placeholder="Search products" aria-label="Search products"></label>
-            <select class="select" id="shopSort" aria-label="Sort products" style="width:auto;height:40px;border-radius:99px">
-              <option value="featured">Featured</option>
-              <option value="trending">Trending</option>
-              <option value="new">Newest</option>
-              <option value="price-asc">Price: Low to High</option>
-              <option value="price-desc">Price: High to Low</option>
-            </select>
+        <div class="shop-amazon-layout">
+          <!-- Left Faceted Sidebar -->
+          <aside class="shop-sidebar" id="shopSidebar">
+            <div class="filter-group">
+              <div class="filter-title"><span>Department</span></div>
+              <div class="filter-list" id="sidebarCatList"></div>
+            </div>
+            <div class="filter-group">
+              <div class="filter-title"><span>Price</span></div>
+              <div class="filter-list" id="sidebarPriceList">
+                <button type="button" class="filter-item active" data-price-filter="all"><span>All Prices</span></button>
+                <button type="button" class="filter-item" data-price-filter="under-600"><span>Under ₹600</span></button>
+                <button type="button" class="filter-item" data-price-filter="600-1000"><span>₹600 – ₹1,000</span></button>
+                <button type="button" class="filter-item" data-price-filter="1000-1500"><span>₹1,000 – ₹1,500</span></button>
+                <button type="button" class="filter-item" data-price-filter="above-1500"><span>Over ₹1,500</span></button>
+              </div>
+            </div>
+            <div class="filter-group">
+              <div class="filter-title"><span>Customer Reviews</span></div>
+              <div class="filter-list" id="sidebarRatingList">
+                <button type="button" class="filter-item active" data-rating-filter="all"><span>All Ratings</span></button>
+                <button type="button" class="filter-item" data-rating-filter="4.5"><span>4.5★ &amp; Above</span></button>
+                <button type="button" class="filter-item" data-rating-filter="4"><span>4.0★ &amp; Above</span></button>
+              </div>
+            </div>
+            <div class="filter-group">
+              <div class="filter-title"><span>Deals &amp; Tags</span></div>
+              <div class="filter-list" id="sidebarTagList">
+                <button type="button" class="filter-item active" data-tag-filter="all"><span>All Items</span></button>
+                <button type="button" class="filter-item" data-tag-filter="bestseller"><span>Bestsellers</span></button>
+                <button type="button" class="filter-item" data-tag-filter="trending"><span>Trending</span></button>
+                <button type="button" class="filter-item" data-tag-filter="new"><span>New Arrivals</span></button>
+              </div>
+            </div>
+            <button class="btn btn-ghost btn-sm btn-block" type="button" id="clearAllFiltersBtn" style="margin-top:14px">Reset Filters</button>
+          </aside>
+
+          <!-- Main Products Area -->
+          <div class="shop-main">
+            <div class="shop-toolbar">
+              <div class="chips" id="catChips" role="tablist" aria-label="Filter by category"></div>
+              <div class="toolbar-right">
+                <label class="search-field"><i data-icon="search"></i><input type="search" id="shopSearch" placeholder="Search products" aria-label="Search products"></label>
+                <select class="select" id="shopSort" aria-label="Sort products" style="width:auto;height:40px;border-radius:99px">
+                  <option value="featured">Featured</option>
+                  <option value="trending">Trending</option>
+                  <option value="new">Newest</option>
+                  <option value="price-asc">Price: Low to High</option>
+                  <option value="price-desc">Price: High to Low</option>
+                  <option value="rating">Top Rated</option>
+                </select>
+              </div>
+            </div>
+            <p class="result-count" id="resultCount" aria-live="polite"></p>
+            <div class="product-grid cols-4" id="shopGrid"></div>
           </div>
         </div>
-        <p class="result-count" id="resultCount" aria-live="polite"></p>
-        <div class="product-grid cols-4" id="shopGrid"></div>
       </div>
     </section>
 
@@ -68,6 +110,7 @@
   <script src="js/mockups.js"></script>
   <script src="js/products.js"></script>
   <script src="js/app.js"></script>
+  <script type="module" src="js/firebase.js"></script>
   <script src="js/shop.js"></script>
 </body>
 </html>

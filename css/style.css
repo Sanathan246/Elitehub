@@ -1397,3 +1397,836 @@ body[data-page="customize"] .site-header .header-inner { justify-content:space-b
   .acct-row { grid-template-columns: 1fr auto; gap: 4px 12px; }
   .acct-row dt { grid-column: 1 / -1; }
 }
+
+
+/* =====================================================================
+   EliteHub — Amazon-Grade Store Enhancements (Luxury Design System)
+   ===================================================================== */
+
+:root {
+  --header-h: 120px;
+  --header-sub-h: 42px;
+}
+
+@media (max-width: 860px) {
+  :root {
+    --header-h: 110px;
+    --header-sub-h: 38px;
+  }
+}
+
+/* Announcement top banner */
+.top-announcement-bar {
+  background: linear-gradient(90deg, #120e1c 0%, #1f172e 50%, #120e1c 100%);
+  border-bottom: 1px solid rgba(230, 191, 134, 0.15);
+  font-size: 11.5px;
+  letter-spacing: 0.04em;
+  color: var(--text-2);
+  padding: 5px 0;
+  position: relative;
+  z-index: 65;
+}
+.announcement-inner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+.announcement-inner span {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.announcement-pill {
+  padding: 2px 9px;
+  border-radius: 99px;
+  background: rgba(230, 191, 134, 0.12);
+  color: var(--gold);
+  border: 1px solid var(--gold-line);
+  font-size: 10.5px;
+}
+.announcement-link {
+  color: var(--gold);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  font-weight: 500;
+}
+.announcement-link:hover { color: #fff; }
+
+@media (max-width: 768px) {
+  .announcement-inner > :nth-child(2),
+  .announcement-inner > :nth-child(3) { display: none; }
+  .announcement-inner { justify-content: center; text-align: center; font-size: 11px; }
+}
+
+/* Site header container adjustments */
+.site-header {
+  position: fixed;
+  inset: 0 0 auto;
+  z-index: 60;
+  height: auto;
+  background: rgba(8, 7, 11, 0.94);
+  backdrop-filter: blur(16px) saturate(140%);
+  -webkit-backdrop-filter: blur(16px) saturate(140%);
+  border-bottom: 1px solid var(--line);
+  transition: transform .3s ease, background .3s;
+}
+.site-header.scrolled {
+  background: rgba(7, 6, 10, 0.98);
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.55);
+}
+
+.header-main-row {
+  height: 68px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.header-left {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex: none;
+}
+
+/* Location indicator (Deliver to India) */
+.header-location {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 10px;
+  border-radius: 8px;
+  border: 1px solid transparent;
+  color: var(--text-2);
+  cursor: pointer;
+  transition: all .2s;
+  flex: none;
+}
+.header-location:hover {
+  background: rgba(255, 255, 255, 0.04);
+  border-color: var(--line-2);
+  color: #fff;
+}
+.loc-pin {
+  color: var(--gold);
+  display: grid;
+  place-items: center;
+}
+.loc-pin .ico { width: 17px; height: 17px; }
+.loc-text {
+  display: flex;
+  flex-direction: column;
+  text-align: left;
+  line-height: 1.15;
+}
+.loc-sub {
+  font-size: 10.5px;
+  color: var(--muted);
+  letter-spacing: 0.02em;
+}
+.loc-main {
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--text);
+  white-space: nowrap;
+}
+
+@media (max-width: 992px) {
+  .header-location { display: none; }
+}
+
+/* Amazon Central Search Bar */
+.header-search-wrap {
+  flex: 1;
+  max-width: 660px;
+  position: relative;
+  z-index: 62;
+}
+
+.amazon-search-form {
+  display: flex;
+  align-items: center;
+  height: 44px;
+  border-radius: 99px;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid var(--gold-line);
+  box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.4), 0 0 16px rgba(230, 191, 134, 0.05);
+  transition: border-color .25s, box-shadow .25s, background .25s;
+}
+.amazon-search-form:focus-within {
+  border-color: var(--gold);
+  background: rgba(255, 255, 255, 0.07);
+  box-shadow: 0 0 0 3px rgba(230, 191, 134, 0.22), inset 0 1px 2px rgba(0, 0, 0, 0.4);
+}
+
+.search-cat-select-wrap {
+  position: relative;
+  flex: none;
+}
+.search-cat-select {
+  height: 44px;
+  padding: 0 28px 0 14px;
+  background: rgba(255, 255, 255, 0.03);
+  border: 0;
+  border-right: 1px solid var(--line-2);
+  border-radius: 99px 0 0 99px;
+  color: var(--text-2);
+  font-size: 12px;
+  font-weight: 500;
+  outline: none;
+  cursor: pointer;
+  appearance: none;
+  -webkit-appearance: none;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23e6bf86' stroke-width='2'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 8px center;
+  background-size: 14px;
+}
+.search-cat-select:focus { color: var(--gold); }
+.search-cat-select option {
+  background: #120e1a;
+  color: #fff;
+}
+
+.amazon-search-input {
+  flex: 1;
+  min-width: 0;
+  height: 44px;
+  padding: 0 12px;
+  background: transparent;
+  border: 0;
+  outline: none;
+  color: var(--text);
+  font-size: 13.5px;
+}
+.amazon-search-input::placeholder {
+  color: var(--muted-2);
+}
+
+.search-clear-btn {
+  width: 28px;
+  height: 28px;
+  display: grid;
+  place-items: center;
+  color: var(--muted);
+  border-radius: 50%;
+  transition: color .2s;
+  flex: none;
+  margin-right: 4px;
+}
+.search-clear-btn:hover { color: #fff; }
+
+.amazon-search-submit {
+  width: 48px;
+  height: 44px;
+  border-radius: 0 99px 99px 0;
+  background: var(--gold-grad);
+  color: #1d140a;
+  display: grid;
+  place-items: center;
+  flex: none;
+  transition: filter .2s, transform .2s;
+}
+.amazon-search-submit:hover {
+  filter: brightness(1.1);
+}
+.amazon-search-submit .ico {
+  width: 18px;
+  height: 18px;
+}
+
+/* Autocomplete suggestions dropdown */
+.search-autocomplete-dropdown {
+  position: absolute;
+  top: calc(100% + 8px);
+  left: 0;
+  right: 0;
+  background: #0f0d16;
+  border: 1px solid var(--gold-line);
+  border-radius: 14px;
+  box-shadow: 0 20px 50px rgba(0, 0, 0, 0.7);
+  overflow: hidden;
+  max-height: 420px;
+  overflow-y: auto;
+  z-index: 100;
+  animation: toastIn .2s ease;
+}
+.ac-header {
+  padding: 8px 14px;
+  font-size: 11px;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+  color: var(--muted);
+  background: rgba(255, 255, 255, 0.02);
+  border-bottom: 1px solid var(--line);
+}
+.ac-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 14px;
+  border-bottom: 1px solid var(--line);
+  color: var(--text-2);
+  transition: background .15s, color .15s;
+  cursor: pointer;
+}
+.ac-item:hover, .ac-item.active {
+  background: rgba(230, 191, 134, 0.08);
+  color: #fff;
+}
+.ac-thumb {
+  width: 40px;
+  height: 40px;
+  border-radius: 6px;
+  background: #181422;
+  overflow: hidden;
+  flex: none;
+  display: grid;
+  place-items: center;
+}
+.ac-thumb svg { width: 100%; height: 100%; padding: 4%; }
+.ac-info {
+  flex: 1;
+  min-width: 0;
+  line-height: 1.25;
+}
+.ac-title {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.ac-sub {
+  font-size: 11px;
+  color: var(--muted);
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  margin-top: 2px;
+}
+.ac-price {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--gold);
+  flex: none;
+}
+.ac-footer {
+  padding: 10px 14px;
+  text-align: center;
+  background: rgba(255, 255, 255, 0.02);
+}
+.ac-footer a {
+  color: var(--gold);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+/* Amazon Nav Line widgets (Account & Lists, Returns & Orders, Cart) */
+.nav-line-1 {
+  font-size: 11px;
+  color: var(--muted);
+  line-height: 1.1;
+  letter-spacing: .02em;
+}
+.nav-line-2 {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text);
+  line-height: 1.2;
+  white-space: nowrap;
+  display: flex;
+  align-items: center;
+  gap: 3px;
+}
+.dropdown-caret {
+  font-size: 9px;
+  color: var(--gold);
+}
+
+.nav-orders-btn {
+  display: flex;
+  flex-direction: column;
+  padding: 6px 10px;
+  border-radius: 8px;
+  transition: all .2s;
+  border: 1px solid transparent;
+}
+.nav-orders-btn:hover {
+  background: rgba(255, 255, 255, 0.04);
+  border-color: var(--line-2);
+}
+
+/* Account Menu Wrapper & Flyout */
+.account-menu-wrapper {
+  position: relative;
+}
+.nav-account-btn {
+  display: flex;
+  flex-direction: column;
+  padding: 6px 10px;
+  border-radius: 8px;
+  transition: all .2s;
+  border: 1px solid transparent;
+  cursor: pointer;
+}
+.nav-account-btn:hover,
+.account-menu-wrapper:hover .nav-account-btn {
+  background: rgba(255, 255, 255, 0.04);
+  border-color: var(--line-2);
+}
+
+.account-flyout {
+  position: absolute;
+  top: calc(100% + 4px);
+  right: -20px;
+  width: 260px;
+  background: #0e0c14;
+  border: 1px solid var(--gold-line);
+  border-radius: 14px;
+  padding: 16px;
+  box-shadow: 0 20px 50px rgba(0, 0, 0, 0.7);
+  opacity: 0;
+  pointer-events: none;
+  transform: translateY(8px);
+  transition: opacity .2s, transform .2s;
+  z-index: 100;
+}
+.account-menu-wrapper:hover .account-flyout,
+.account-menu-wrapper:focus-within .account-flyout {
+  opacity: 1;
+  pointer-events: auto;
+  transform: none;
+}
+.flyout-top {
+  text-align: center;
+  margin-bottom: 12px;
+}
+.flyout-new {
+  font-size: 11px;
+  color: var(--muted);
+  margin-top: 8px;
+}
+.flyout-new a {
+  color: var(--gold);
+  font-weight: 600;
+}
+.flyout-new a:hover { text-decoration: underline; }
+.flyout-divider {
+  height: 1px;
+  background: var(--line);
+  margin: 10px 0;
+}
+.flyout-links strong {
+  display: block;
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: .08em;
+  color: var(--gold);
+  margin-bottom: 8px;
+}
+.flyout-links a, .flyout-signout-btn {
+  display: block;
+  padding: 6px 0;
+  font-size: 12.5px;
+  color: var(--text-2);
+  transition: color .2s, transform .2s;
+  text-align: left;
+  width: 100%;
+}
+.flyout-links a:hover, .flyout-signout-btn:hover {
+  color: var(--gold);
+  transform: translateX(4px);
+}
+.flyout-signout-btn {
+  border-top: 1px solid var(--line);
+  margin-top: 6px;
+  padding-top: 8px;
+  color: var(--danger);
+}
+
+/* Amazon Nav Cart Button */
+.nav-cart-btn {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 12px;
+  border-radius: 8px;
+  border: 1px solid transparent;
+  color: var(--text);
+  transition: all .2s;
+}
+.nav-cart-btn:hover {
+  background: rgba(255, 255, 255, 0.04);
+  border-color: var(--line-2);
+  color: var(--gold);
+}
+.cart-icon-wrap {
+  position: relative;
+  display: grid;
+  place-items: center;
+}
+.cart-icon-wrap .ico { width: 24px; height: 24px; }
+.cart-label {
+  font-size: 13.5px;
+  font-weight: 700;
+  line-height: 1;
+}
+
+/* Secondary Sub-Navbar (Department Bar) */
+.sub-navbar {
+  height: var(--header-sub-h);
+  background: rgba(14, 11, 20, 0.95);
+  border-top: 1px solid rgba(255, 255, 255, 0.05);
+  display: flex;
+  align-items: center;
+  overflow-x: auto;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+.sub-navbar::-webkit-scrollbar { display: none; }
+.subnav-inner {
+  display: flex;
+  align-items: center;
+  gap: 20px;
+  white-space: nowrap;
+}
+.subnav-all-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12.5px;
+  font-weight: 700;
+  color: #fff;
+  padding: 4px 8px;
+  border-radius: 6px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: rgba(255, 255, 255, 0.04);
+  cursor: pointer;
+  transition: all .2s;
+}
+.subnav-all-btn:hover {
+  background: rgba(230, 191, 134, 0.1);
+  border-color: var(--gold-line);
+  color: var(--gold);
+}
+.subnav-item {
+  font-size: 12.5px;
+  font-weight: 500;
+  color: var(--text-2);
+  padding: 4px 0;
+  transition: color .2s;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.subnav-item:hover { color: #fff; }
+.subnav-item.highlight {
+  color: var(--gold);
+  font-weight: 600;
+}
+.sparkle-ico .ico { width: 14px; height: 14px; color: var(--gold); }
+.subnav-pill {
+  font-size: 9px;
+  padding: 1px 6px;
+  border-radius: 99px;
+  background: var(--gold-grad);
+  color: #1d140a;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: .06em;
+}
+
+/* Mobile search toggle */
+.mobile-search-toggle { display: none; }
+
+@media (max-width: 860px) {
+  .header-search-wrap {
+    display: none;
+  }
+  .header-search-wrap.mobile-open {
+    display: block;
+    position: absolute;
+    top: 68px;
+    left: 12px;
+    right: 12px;
+    max-width: none;
+    z-index: 99;
+  }
+  .mobile-search-toggle {
+    display: grid;
+  }
+  .search-cat-select-wrap { display: none; }
+  .amazon-search-input { padding-left: 16px; }
+  .nav-line-1 { display: none; }
+  .nav-line-2 { font-size: 12px; }
+  .nav-orders-btn { display: none; }
+}
+
+/* ---------- Enhanced Product Card (Amazon Grade) ---------- */
+.p-rating-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11px;
+  color: var(--muted);
+  margin-top: 3px;
+}
+.p-rating-stars {
+  display: flex;
+  gap: 1.5px;
+  color: var(--gold);
+}
+.p-rating-stars .ico { width: 12px; height: 12px; }
+.p-delivery-tag {
+  font-size: 11px;
+  color: var(--text-2);
+  margin-top: 4px;
+}
+.p-delivery-tag b { color: var(--gold); }
+.p-off-pill {
+  font-size: 10px;
+  font-weight: 700;
+  color: var(--success);
+  background: rgba(103, 211, 154, 0.12);
+  padding: 1px 6px;
+  border-radius: 4px;
+  margin-left: 4px;
+}
+
+/* ---------- Shop Page Layout (Amazon Faceted Sidebar) ---------- */
+.shop-amazon-layout {
+  display: grid;
+  grid-template-columns: 240px 1fr;
+  gap: 32px;
+  align-items: start;
+}
+@media (max-width: 900px) {
+  .shop-amazon-layout { grid-template-columns: 1fr; }
+}
+
+.shop-sidebar {
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  padding: 22px 18px;
+  position: sticky;
+  top: calc(var(--header-h) + 16px);
+}
+.filter-group {
+  margin-bottom: 22px;
+  padding-bottom: 18px;
+  border-bottom: 1px solid var(--line);
+}
+.filter-group:last-child {
+  margin-bottom: 0;
+  padding-bottom: 0;
+  border-bottom: 0;
+}
+.filter-title {
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: .08em;
+  font-weight: 600;
+  color: var(--gold);
+  margin-bottom: 12px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+.filter-list {
+  display: grid;
+  gap: 8px;
+}
+.filter-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 12.5px;
+  color: var(--text-2);
+  cursor: pointer;
+  transition: color .2s;
+}
+.filter-item:hover, .filter-item.active {
+  color: var(--gold);
+}
+.filter-count {
+  font-size: 11px;
+  color: var(--muted);
+  background: rgba(255, 255, 255, 0.04);
+  padding: 1px 6px;
+  border-radius: 99px;
+}
+
+/* ---------- Product Detail Page Enhancements ---------- */
+.stock-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--success);
+  margin-bottom: 10px;
+}
+.stock-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--success);
+  box-shadow: 0 0 10px rgba(103, 211, 154, 0.8);
+  animation: pulseDot 2s infinite;
+}
+@keyframes pulseDot {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50% { opacity: .6; transform: scale(1.25); }
+}
+
+.delivery-box {
+  background: rgba(255, 255, 255, 0.02);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  padding: 14px 16px;
+  margin: 18px 0 22px;
+  font-size: 13px;
+  line-height: 1.5;
+}
+.delivery-box strong { color: var(--gold); }
+.delivery-box .muted { font-size: 11.5px; margin-top: 4px; display: block; }
+
+/* Ratings Breakdown */
+.pdp-ratings-section {
+  margin-top: 40px;
+  padding-top: 32px;
+  border-top: 1px solid var(--line);
+}
+.rating-breakdown {
+  display: grid;
+  grid-template-columns: 200px 1fr;
+  gap: 32px;
+  align-items: center;
+  margin: 20px 0 32px;
+}
+@media (max-width: 640px) {
+  .rating-breakdown { grid-template-columns: 1fr; gap: 20px; }
+}
+.rating-big-score {
+  text-align: center;
+  padding: 18px;
+  border-radius: var(--radius-sm);
+  background: rgba(255, 255, 255, 0.02);
+  border: 1px solid var(--line);
+}
+.score-num {
+  font-size: 48px;
+  font-family: var(--font-display);
+  color: var(--gold);
+  line-height: 1;
+}
+.score-stars {
+  display: flex;
+  justify-content: center;
+  gap: 3px;
+  color: var(--gold);
+  margin: 6px 0;
+}
+.score-stars .ico { width: 18px; height: 18px; }
+.rating-bars {
+  display: grid;
+  gap: 8px;
+}
+.bar-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 12px;
+  color: var(--muted);
+}
+.bar-track {
+  flex: 1;
+  height: 8px;
+  background: rgba(255, 255, 255, 0.08);
+  border-radius: 99px;
+  overflow: hidden;
+}
+.bar-fill {
+  height: 100%;
+  background: var(--gold-grad);
+  border-radius: 99px;
+}
+
+/* Verified Reviews */
+.reviews-grid {
+  display: grid;
+  gap: 16px;
+  margin-top: 20px;
+}
+.review-card {
+  padding: 18px 20px;
+  border-radius: var(--radius-sm);
+  background: var(--card);
+  border: 1px solid var(--line);
+}
+.review-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 8px;
+}
+.reviewer-info {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.reviewer-avatar {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  background: var(--gold-grad);
+  color: #1d140a;
+  display: grid;
+  place-items: center;
+  font-weight: 700;
+  font-size: 13px;
+}
+.reviewer-name {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text);
+}
+.verified-tag {
+  font-size: 10.5px;
+  color: var(--gold);
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+.review-date {
+  font-size: 11.5px;
+  color: var(--muted);
+}
+.review-text {
+  font-size: 13px;
+  color: var(--text-2);
+  line-height: 1.5;
+  margin: 6px 0 0;
+}
+
+
+/* =====================================================================
+   EliteHub — Amazon-Grade Store Enhancements (Luxury Design System)
+   ===================================================================== */
+
+:root {
+  --header-h: 120px;
+  --header-sub-h: 42px;
+}
+
+@media (max-width: 860px) {
+  :root {
+    --header-h: 110px;
+    --header-sub-h: 38px;
+  }
+}

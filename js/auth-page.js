@@ -33,7 +33,7 @@
     }
   })();
   const nextLabel = () => (/checkout/i.test(nextTarget) ? 'Continue to checkout' : 'Continue where you left off');
-  const goNext = () => { if (nextTarget) location.assign(nextTarget); };
+  const goNext = () => { location.assign(nextTarget || 'account.html'); };
   if (nextTarget) {
     const raw = new URLSearchParams(location.search).get('next');
     document.querySelectorAll('.auth-switch a').forEach((link) => {
