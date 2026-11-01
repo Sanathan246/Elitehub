@@ -443,7 +443,6 @@
         <div class="top-announcement-bar">
           <div class="container announcement-inner">
             <span>🚀 Free Express Shipping across India on orders over ₹999</span>
-            <span class="announcement-pill">Code: <b>ELITE10</b> for 10% Off</span>
             <a href="contact.html" class="announcement-link">24/7 Support</a>
           </div>
         </div>
